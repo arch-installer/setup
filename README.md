@@ -8,8 +8,11 @@ DISCLAIMER: This is early software and will definitely change during the course 
 * Disk mounting & formatting menus (mostly) done
 
 ## Screenshots
+### Script initialization
 ![Setup 1](/GitHub/setup-1.png)
+### Disk partitioning
 ![Setup 2](/GitHub/setup-2.png)
+### Mounting partitions
 ![Setup 3](/GitHub/setup-3.png)
 
 ## TODO
