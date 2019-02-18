@@ -45,10 +45,14 @@ font = 'Lat2-Terminus16'
 # def. ''
 base_pkgs = 'vim htop'
 
-# Whether to enable NTP time synchronization
+# Whether to enable Network Time Protocol time synchronization
 # def. 'True'
 enable_ntp = True
 
+# Should the system use localtime as the timescale instead of UTC?
+# This should be True when when multi-booting with Windows
+# def. 'False'
+use_localtime = False
 
 # Timezone setup e.g. 'Region/City'
 # See 'timezones.txt' for all options
@@ -86,6 +90,8 @@ hostname = ''
 
 # Name for the non-privileged user (if one should be created)
 # NOTE AUR support requires a normal user
+# TODO Multi-user creation support, users seperated by ','
+# TODO Auto-login support?
 user = 'tester'
 
 # Whether to ask root password when using sudo as the normal user
@@ -133,8 +139,85 @@ multibooting = False
 ###############################
 
 def custom_setup():
-	pass # TODO Remove this
-	#print_header('Custom Setup')
+	# Use 'pass' to ignore the function
+	#pass
+
+	write_msg("Installing custom packages...", 1)
+	errors = pkg.aur_install('c-lolcat')
+	errors += pkg.install('neofetch')
+	write_status(ret_val)
+
+	write_msg("Adding custom TTY colors to all user's .bashrc files...", 1)
+	rc = '#\n# ~/.bashrc\n#\n\n'
+	rc += "# If not running interactively, don't do anything\n"
+	rc += "[[ $- != *i* ]] && return\n\n"
+	# TODO Custom prompt setup?
+	#rc += '\n\n# >> Entries added by ArchInstaller.py >>\n\n'
+	rc += "PS1='[\\u@\\h \\W]\\$ '\n\n"
+	rc += '# >> Entries added by ArchInstaller.py >>\n\n'
+	rc += '# Custom TTY colors\n'
+	rc += 'if [ "$TERM" = "linux" ]; then\n'
+	# TODO 16 color support?
+	rc += "\techo -en '\\e]P00C0C0C' # Black\n"
+	rc += "\techo -en '\\e]P1AF1923' # Red\n"
+	rc += "\techo -en '\\e]P269A62A' # Green\n"
+	rc += "\techo -en '\\e]P3E68523' # Yellow\n"
+	rc += "\techo -en '\\e]P42935B1' # Blue\n"
+	rc += "\techo -en '\\e]P57C1FA1' # Magenta\n"
+	rc += "\techo -en '\\e]P62397F5' # Cyan\n"
+	rc += "\techo -en '\\e]P79E9E9E' # White\n"
+	rc += '\tclear # For avoiding coloring artifacts\n'
+	rc += 'fi\n\n'
+	rc += '# Load aliases from .bashrc.aliases\n'
+	rc += 'if [ -e ~/.bashrc.aliases ]; then\n'
+	rc += '\tsource ~/.bashrc.aliases\n'
+	rc += 'fi\n'
+	rc += '\n# << End of entries added by ArchInstaller.py <<'
+
+	# TODO Fix changes not applying to the root user
+
+	# TODO Use append function again once fixed?
+	errors = io.write('/root/.bashrc', rc)
+	# TODO Multi-user support
+	errors += io.write('/home/%s/.bashrc' % user, rc)
+	write_status(errors)
+
+	write_msg("Creating custom .bashrc.aliases file for all users...", 1)
+	aliases = '#\n# ~/.bashrc.aliases\n#\n\n'
+	aliases += '# >> Entries added by ArchInstaller.py >>\n\n'
+	aliases += '# python aliases\n'
+	aliases += 'alias py3=python3\n'
+	aliases += 'alias py2=python2\n'
+	aliases += 'alias py=py3\n\n'
+	aliases += '# clear aliases\n'
+	aliases += 'alias cls=clear\n'
+	aliases += 'alias clr=clear\n'
+	aliases += 'alias clera=clear\n'
+	aliases += 'alias csl=clear\n'
+	#aliases += 'alias c=clear\n\n'
+	aliases += '# ls aliases\n'
+	aliases += 'alias ls="ls -h --color"\n'
+	#aliases += 'alias ls="ls -h --color | lolcat"\n'
+	aliases += 'alias ll="ls -l"\n'
+	aliases += 'alias la="ls -la"\n'
+	aliases += 'alias dir=ls\n'
+	aliases += 'alias l=ls\n\n'
+	aliases += '# misc aliases\n'
+	aliases += 'alias "cd.."="cd .."\n'
+	aliases += 'alias md=mkdir\n'
+	aliases += 'alias quit=exit\n'
+	#aliases += 'alias q=exit\n\n'
+	aliases += '# Rainbow screen & neofetch when not in a TTY\n'
+	aliases += 'if [ "$TERM" != "linux" ]; then\n'
+	aliases += '\talias screenfetch="screenfetch | lolcat"\n'
+	aliases += '\talias neofetch="neofetch | lolcat"\n'
+	aliases += 'fi\n'
+	aliases += '\n# << End of entries added by ArchInstaller.py <<'
+
+	errors = io.write('/root/.bashrc.aliases', aliases)
+	# TODO Multi-user support
+	errors += io.write('/home/%s/.bashrc.aliases' % user, aliases)
+	write_status(errors)
 
 
 
@@ -290,9 +373,9 @@ class io:
 	# Reads the first line from a file
 	# Returns: String on success, None on error
 	@staticmethod
-	def read_ln(fPath):
+	def read_ln(f_path):
 		try:
-			with open(fPath, 'r') as f:
+			with open(f_path, 'r') as f:
 				tmp_ln = f.readline().rstrip('\n')
 		except:
 			tmp_ln = None
@@ -301,20 +384,27 @@ class io:
 	# Writes text to a file
 	# Returns: 0 = Success, 1 = Error
 	@staticmethod
-	def write(fPath, text, append=False):
+	def write(f_path, text, append=False):
 		try:
+			# TODO Fix append mode??
 			mode = 'a' if append else 'w'
-			with open(fPath, mode) as f:
+			with open(f_path, '%s+' % mode) as f:
 				f.write(text)
 			return 0
 		except:
 			return 1
 
+	# Appends text to a file
+	# Returns: 0 = Success, 1 = Error
+	@staticmethod
+	def append(f_path, text):
+		return io.write(f_path, text, True)
+
 	# Writes a line to a file
 	# Returns: 0 = Success, 1 = Error
 	@staticmethod
-	def write_ln(fPath, text = '', append=True):
-		return io.write(fPath, text + '\n', append)
+	def write_ln(f_path, text = '', append=True):
+		return io.write(f_path, text + '\n', append)
 
 	# TODO Write a get_lines to re-use in other code below
 
@@ -433,14 +523,28 @@ class pkg:
 			write_status(ret_val)
 		return ret_val
 
-	# TODO Implement aur_install function (use yay)
-	#def aur_install()
-
+	# TODO Progress reporting messages
+	# Install packages from the Arch User Repository (AUR)
+	# Returns: pacman exit code
+	@staticmethod
+	def aur_install(pkgs, only_needed=True, msg=''):
+		if enable_aur:
+			if msg != '':
+				write_msg(msg, 1)
+			yay_args = '--needed' if only_needed else ''
+			if yay_args != '': yay_args = ' ' + yay_args
+			ret_val = cmd.log('$ yay -Sq --noconfirm%s %s' % (yay_args, pkgs))
+			if msg != '':
+				write_status(ret_val)
+			return ret_val
+		else:
+			log('[setup.py:pkg.aur_install(%s)] WARN: Ignoring installation, since the AUR support is not disabled.' % pkgs)
+			return 1
 # Command execution
 
 class cmd:
 	# Run a command on the shell with an optional io stream
-	# io_stream_type: 0 = none, 1 = stdin, 2 = stdout, 3 = logged, 4 = all_supressed
+	# io_stream_type: 0 = none, 1 = stdout, 2 = logged, 3 = all_supressed
 	# Returns: command exit code / output when io_stream_type=2
 	@staticmethod
 	def exec(command, io_stream_type=0):
@@ -455,10 +559,9 @@ class cmd:
 				log('[setup.py:cmd.exec(%s)] WARN: Ignoring "%s" execution, since no user was defined.' % (str(io_stream_type), command))
 				return 1
 
-		use_stdin = (io_stream_type == 1)
-		use_stdout = (io_stream_type == 2)
-		logged = (io_stream_type == 3)
-		suppress = (io_stream_type == 4)
+		use_stdout = (io_stream_type == 1)
+		logged = (io_stream_type == 2)
+		suppress = (io_stream_type == 3)
 
 		end = ''
 		if suppress or logged:
@@ -470,38 +573,30 @@ class cmd:
 				log('\n%s%s' % (start, command))
 		if use_stdout:
 			res = run(exec_cmd + end, shell=True, encoding='utf-8', capture_output=use_stdout)
-		elif use_stdin:
-			res = run(exec_cmd + end, shell=True, input=use_stdin)
 		else:
 			res = run(exec_cmd + end, shell=True)
 
 		returns = res.stdout if use_stdout else res.returncode
 		return returns
 
-	# Run a command on the shell while allowing user input
-	# Returns: command exit code
-	@staticmethod
-	def input(command):
-		return cmd.exec(command, 1)
-
 	# Run a command on the shell while capturing all it's output
 	# New lines are seperated with a '\n'
 	# Returns: command exit code
 	@staticmethod
 	def output(command):
-		return cmd.exec(command, 2)
+		return cmd.exec(command, 1)
 
 	# Run a command on the shell while logging all it's output
 	# Returns: command exit code
 	@staticmethod
 	def log(command):
-		return cmd.exec(command, 3)
+		return cmd.exec(command, 2)
 
 	# Run a command on the shell while supressing all it's output
 	# Returns: command exit code
 	@staticmethod
 	def suppress(command):
-		return cmd.exec(command, 4)
+		return cmd.exec(command, 3)
 
 
 
@@ -772,7 +867,7 @@ def par_opt_handler(opt): # , format_par=-1
 		if fs_type != 'swap':
 			if opt == 'O':
 				write_msg(color_str('Where would you like to mount §7%s §0in the new system (e.g. §3/var§0)? §7>> ' % par))
-				mp = input().strip()  # e.g. '/var'
+				mp = input().strip() # e.g. '/var'
 			elif opt == 'R':
 				mp = '/'
 			elif opt == 'B':
@@ -783,7 +878,7 @@ def par_opt_handler(opt): # , format_par=-1
 				mp = '/efi'
 
 			# TODO Prevent mounting to / when using NTFS etc.
-			if len(mp) > 0 and mp.startswith('/'):  # Assume proper path
+			if len(mp) > 0 and mp.startswith('/'): # Assume proper path
 				write_msg('Mounting %s to %s...' % (par, mp), 1)
 				# TODO Add custom optional mounting options
 				ret_val = mount_par(par, mp) # e.g. 'mount /dev/sda1 /mnt/'
@@ -791,7 +886,9 @@ def par_opt_handler(opt): # , format_par=-1
 				if ret_val != 0:
 					pause = True
 				elif boot_mode == 'BIOS/CSM' and ((opt == 'R' and mbr_grub_dev == '') or opt == 'B'): # Update MBR GRUB device
-					mbr_grub_dev = par # e.g. '/dev/sda1'
+					if par[-1:].isdigit():
+						par = par[:-1]
+					mbr_grub_dev = par # e.g. '/dev/sda'
 			else:
 				write_msg('Mounting cancelled due to an invalid mountpoint.', 4)
 				pause = True
@@ -832,7 +929,7 @@ def write_par_mount(key='E', mount='/efi', device='/dev/sda1', condition=False, 
 					break
 			if device == '':
 				device = '/dev/null'
-				log("WARN: Mountpoint not found for mount '%s' on device '%s', showing /dev/null instead..." % (mount, device))
+				log("[setup.py:write_par_mount()] WARN: Mountpoint not found for mount '%s' on device '%s', showing /dev/null instead..." % (mount, device))
 				log("Mounts: '%s'" % mounts)
 		action = 'mounted as' if key != 'S' else 'enabled on'
 		write(color_str(' §3(%s §7%s§3)' % (action, device)))
@@ -880,11 +977,11 @@ def list_used_pars(hide_guide=False):
 			split_mounts = other_mounts.split(',') # e.g. '/root:/dev/sda2', '/efi:/dev/sda1'
 			for entry in split_mounts:             # e.g. '/efi:/dev/sda1'
 				if entry != '':
-					split_entry = entry.split(':')       # e.g. '/efi', '/dev/sda1'
+					split_entry = entry.split(':')     # e.g. '/efi', '/dev/sda1'
 					try:
 						write_par_mount('', split_entry[0], split_entry[1], True, 7, 3)
 					except:
-						log("WARN: Couldn't display other mount entry '%s'" % entry)
+						log("[setup.py:list_used_pars()] WARN: Couldn't display other mount entry '%s'" % entry)
 
 		#start = '\n' if len(other_mounts) != 0 else ''
 		# %s % start
@@ -914,7 +1011,7 @@ def list_used_pars(hide_guide=False):
 			command = "lsblk | grep -v '^loop' | grep -v '^sr0'"
 			if sel == 'I':
 				command = "blkid | grep -v '^/dev/loop' | grep -v '^/dev/sr0'"
-			elif sel == 'F':          # 'DEV    TYPE       SIZE MOUNT'
+			elif sel == 'F':       # 'DEV    TYPE       SIZE MOUNT'
 				# TODO Strip /dev/loop0 entry from 'fdisk -l' ouput
 				command = 'fdisk -l' # lsblk -n -o NAME,FSTYPE,SIZE,MOUNTPOINT
 			write_ln()
@@ -961,7 +1058,8 @@ def mounting_menu():
 # Mirrorlist sorting
 
 def sort_mirrors():
-	print_header('Mirrorlist Sorting')
+	print_header('Installing Arch Linux')
+	write_msg('Starting Arch Linux install process...', 2)
 	write_msg('Fetching reflector for mirrorlist sorting...', 1)
 	ret_val = pkg.install('reflector')
 	write_status(ret_val)
@@ -979,7 +1077,6 @@ def sort_mirrors():
 		cmd.log('cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.reflector')
 
 		pkg.refresh_dbs(True, 'Refreshing pacman package databases...')
-		write_msg('Starting base system install process...', 1)
 		sleep(0.25)
 	# else: TODO Update 'pacman-mirrorlist' pkg instead
 
@@ -987,8 +1084,8 @@ def sort_mirrors():
 
 # TODO Use global sys_root variable in the future
 def base_install(sys_root = '/mnt/'):
-	print_header('Base System Install')
 	write_msg('Installing base system using pacstrap, please wait...', 1)
+	# TODO Only install sudo if 'user' is defined
 	ret_val = cmd.log('pacstrap %s base sudo python %s' % (sys_root, base_pkgs)) # TODO Report on progress
 	write_status(ret_val)
 	if ret_val != 0: # Base install failure
@@ -1010,7 +1107,7 @@ def start_chroot(sys_root = '/mnt/'):
 
 	ret_val = io.write('%setc/vconsole.conf' % sys_root, 'KEYMAP="%s"\nFONT="%s"' % (keymap, font))
 	if ret_val != 0:
-		log("WARN: Couldn't set persistent keymap (%s) in '%setc/vconsole.conf'" % (keymap, sys_root))
+		log("[setup.py:start_chroot()] WARN: Couldn't set persistent keymap (%s) & font (%s) in '%setc/vconsole.conf'" % (keymap, font, sys_root))
 
 	cmd.log('cp "%s" "%sroot/"' % (script_path, sys_root)) # e.g. 'cp "/root/setup.py" "/mnt/root/"'
 	cmd.log('chmod 755 %sroot/%s' % (sys_root, script_fn)) # e.g. 'chmod 755 /mnt/root/setup.py'
@@ -1032,15 +1129,13 @@ def start_chroot(sys_root = '/mnt/'):
 def timezone_setup():
 	write_msg('Settings datetime & timezone settings...', 1)
 	ret_val = cmd.log('ln -sf /usr/share/zoneinfo/%s /etc/localtime' % timezone)
-	cmd.log('hwclock --systohc')
+	timescale = 'localtime' if use_localtime else 'utc'
+	cmd.log('hwclock --systohc --%s' % timescale)
 	write_status(ret_val)
 	if ret_val != 0:
-		log("ERROR: Couldn't set timezone as '%s'. Most likely cause: invalid timezone" % timezone)
-
-# TODO Move to another place (io class)
+		log("[setup.py:timezone_setup()] ERROR: Couldn't set timezone as '%s'. Most likely cause: invalid timezone" % timezone)
 
 def locale_setup():
-	print_header('Locale Setup')
 	cmd.log('cp /etc/locale.gen /etc/locale.gen.bak')
 
 	# /etc/locale.conf
@@ -1065,7 +1160,7 @@ def locale_setup():
 			ret_val = io.uncomment_ln('/etc/locale.gen', '%s' % locale)
 			write_status(ret_val)
 			if ret_val != 0:
-				log("WARN: Couldn't find locale '%s' in /etc/locale.gen" % locale)
+				log("[setup.py:locale_setup()] WARN: Couldn't find locale '%s' in /etc/locale.gen" % locale)
 
 	write_msg('Generating chosen locales, please wait...', 1)
 	ret_val = cmd.log('locale-gen')
@@ -1092,7 +1187,7 @@ def locale_setup():
 		ret_val = io.write('/etc/locale.conf', locale_conf)
 		write_status(ret_val)
 		if ret_val != 0:
-			log("ERROR: Locale conf couldn't be written!")
+			log("[setup.py:locale_setup()] ERROR: Locale conf couldn't be written!")
 
 def ufw_setup():
 	write_msg("Setting up uncomplicated firewall...", 1)
@@ -1108,17 +1203,15 @@ def networking_setup():
 		hostname += io.read_ln('/sys/devices/virtual/dmi/id/board_name').rstrip() # e.g. 'Z270N-WIFI'
 
 	# /etc/hostname
-	print_header('Networking Setup')
 	write_msg("Setting hostname as '%s'..." % hostname, 1)
 	ret_val = io.write('/etc/hostname', hostname)
-	log("INFO: Hostname is '%s'" % hostname)
+	log("[setup.py:networking_setup()] INFO: Hostname is '%s'" % hostname)
 	write_status(ret_val)
 
 	# /etc/hosts
 	write_msg("Generating hosts file...", 1)
 	hosts = '# hosts - static table lookup for hostnames\n127.0.0.1	localhost\n::1		localhost\n127.0.1.1	§.localdomain	§'.replace('§', hostname)
 	ret_val = io.write('/etc/hosts', hosts)
-	log("INFO: Hostname is '%s'" % hostname)
 	log("\n/etc/hosts\n==========\n%s" % hosts)
 	write_status(ret_val)
 
@@ -1132,38 +1225,38 @@ def networking_setup():
 		ufw_setup()
 
 def aur_setup():
-	print_header('AUR Setup')
 	write_msg('Installing dependencies for AUR support, please wait...', 1)
 	ret_val = pkg.install('base-devel git')
 	write_status(ret_val)
 	if ret_val == 0: # Git install successfull
-		write_msg('Fetching yay from the AUR & building it from source, please wait...', 1)
-		ret_val = cmd.log('$ cd && git clone https://aur.archlinux.org/yay.git && cd yay && makepkg -sric --skippgpcheck --noconfirm --needed')
+		write_msg('Fetching & installing yay from the AUR, please wait...', 1)
+		ret_val = cmd.log('$ cd && git clone https://aur.archlinux.org/yay-bin.git && cd yay-bin && makepkg -sric --skippgpcheck --noconfirm --needed')
 		write_status(ret_val)
 		if ret_val == 0: # Yay install successfull
 			cmd.log('rm -rf /home/%s/yay-bin' % user) # Delete old build folder
+
 			# Optimize makepkg for building on all CPU cores
-			io.replace_ln('/etc/makepkg.conf', '#MAKEFLAGS=\"', 'MAKEFLAGS=\"-j$(nproc+1)\"')
+			# TODO Other makepkg.conf optimizations
+			io.replace_ln('/etc/makepkg.conf', '#MAKEFLAGS="', 'MAKEFLAGS="-j$(nproc)"')
 
 def user_setup():
-	print_header('User Setup (1/2)')
-	# TODO Setup user & root user passwords w/ passwd
+	# TODO Setup other users too
 	write_msg("Setting up regular user '%s'..." % user, 1)
-	cmd.log('useradd -m -G wheel,storage,input %s' % user)
+	errors = cmd.log('useradd -m -g users -G wheel,storage,input %s' % user)
 
-	cmd.suppress('cp /etc/sudoers /etc/sudoers.bak')
+	errors += cmd.suppress('cp /etc/sudoers /etc/sudoers.bak')
 
 	# TODO Create an actual replace by line number function
 	# Give wheel group users sudo permission w/o pass
-	cmd.exec("sed '85 s/^# //' /etc/sudoers > /etc/sudoers.tmp")
-	cmd.suppress("mv /etc/sudoers.tmp /etc/sudoers")
-	cmd.suppress("chmod 440 /etc/sudoers")
+	errors += cmd.exec("sed '85 s/^# //' /etc/sudoers > /etc/sudoers.tmp")
+	errors += cmd.suppress("mv /etc/sudoers.tmp /etc/sudoers")
+	errors += cmd.suppress("chmod 440 /etc/sudoers")
+	write_status(errors)
 
 	if enable_aur:
 		aur_setup()
 
 def multilib_setup():
-	print_header('Multilib Setup')
 	write_msg('Including multilib repo in /etc/pacman.conf...', 1)
 	cmd.suppress('cp /etc/pacman.conf /etc/pacman.conf.bak')
 	ln = io.get_ln_number('/etc/pacman.conf', '#[multilib]') # should be 93
@@ -1177,13 +1270,12 @@ def multilib_setup():
 
 		write_status(errors)
 		if errors == 0:
-			pkg.refresh_dbs('Refreshing pacman package databases, please wait...')
+			pkg.refresh_dbs(False, 'Refreshing pacman package databases, please wait...')
 	else:
 		write_status(1)
 
 def sshd_setup():
-	print_header('SSH Server Setup')
-	write_msg('Installing OpenSSH server...', 1)
+	write_msg('Setting up OpenSSH server...', 1)
 	ret_val = pkg.install('openssh')
 	write_status(ret_val)
 
@@ -1193,7 +1285,6 @@ def sshd_setup():
 		cmd.log('systemctl enable sshd.socket')
 
 def lts_kernel_setup():
-	print_header('Linux LTS Kernel')
 	write_msg('Switching to the Linux LTS kernel, please wait...')
 	ret_val = pkg.remove('linux', "Removing regular 'linux' kernel...")
 	write_status(ret_val)
@@ -1201,8 +1292,7 @@ def lts_kernel_setup():
 	write_status(ret_val)
 
 def bootloader_setup():
-	print_header('Installing the Bootloader')
-	write_msg('Fetching dependencies for GRUB...', 1)
+	write_msg('Fetching dependencies for the GRUB bootloader...', 1)
 	ret_val = pkg.install('grub %s-ucode dosfstools' % cpu_type)
 	write_status(ret_val)
 
@@ -1212,19 +1302,19 @@ def bootloader_setup():
 		errors += cmd.log('grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id="GRUB"')
 		write_status(errors)
 	else: # BIOS/CSM
-		ret_val = cmd.log('grub-install --recheck %s' % mbr_grub_dev) # e.g. '# grub-install --recheck /dev/sda1'
+		ret_val = cmd.log('grub-install --recheck %s' % mbr_grub_dev)
 		write_status(ret_val)
 
-	write_msg('Creating initial GRUB config, please wait...')
+	write_msg('Creating initial GRUB config, please wait...', 1)
 	ret_val = cmd.log('grub-mkconfig -o /boot/grub/grub.cfg')
 	write_status(ret_val)
 
 def bootloader_extra_setup():
-	print_header('Bootloader Extra Setup')
 	write_msg('Installing GRUB multiboot support dependencies...', 1)
 	pkg.install('fuse2 ntfs-3g os-prober')
 	# TODO Figure out lvme_tad slowdown if running grub-mkconfig after installing os-prober...
-	
+	# '# update-grub' ...
+
 
 
 
@@ -1268,14 +1358,15 @@ def start_ch_install():
 	custom_setup()
 	if multibooting: bootloader_extra_setup()
 
-	print_header('User Setup (2/2)')
 	write_ln()
-	write_msg('Create a password for the root user:\n')
+	write_msg('Create a password for the root user:\n\n')
 	cmd.exec('passwd')
-	if user != '':
-		write_msg('Create a password for the regular user %s:\n' % user)
-		cmd.exec('$ passwd')
 	write_ln()
+	if user != '':
+		# TODO Do the same for other accounts
+		write_msg('Create a password for the regular user %s:\n\n' % user)
+		cmd.exec('passwd %s' % user)
+		write_ln()
 
 	if sudo_ask_pass:
 		cmd.suppress('cp /etc/sudoers.bak /etc/sudoers')
@@ -1365,8 +1456,8 @@ write_msg('Entering disk partitioning menu...', 1)
 sleep(0.25)
 partitioning_menu()
 
-log('\nBlock device map after partitioning:')
-cmd.log('lsblk')
+log('\n[setup.py] Block device map after partitioning:')
+cmd.log("blkid | grep -v '^/dev/loop' | grep -v '^/dev/sr0'") # lsblk
 
 mounting_menu()
 
