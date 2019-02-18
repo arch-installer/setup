@@ -98,7 +98,7 @@ user = 'tester'
 # def. 'True'
 sudo_ask_pass = False
 
-# Should AUR be enabled by installing an AUR helper (yay initially)?
+# Should the Arch User Repository (AUR) be enabled (install AUR helper 'yay')?
 # def. 'False'
 enable_aur = True
 
@@ -147,7 +147,7 @@ def custom_setup():
 	errors += pkg.install('neofetch')
 	write_status(errors)
 
-	write_msg("Adding custom TTY colors to all user's .bashrc files...", 1)
+	write_msg("Adding custom bash config for all users...", 1)
 	rc = '#\n# ~/.bashrc\n#\n\n'
 	rc += "# If not running interactively, don't do anything\n"
 	rc += "[[ $- != *i* ]] && return\n\n"
@@ -174,15 +174,13 @@ def custom_setup():
 	rc += 'fi\n'
 	rc += '\n# << End of entries added by ArchInstaller.py <<'
 
-	# TODO Fix changes not applying to the root user
-
 	# TODO Use append function again once fixed?
-	errors = io.write('/root/.bashrc', rc)
+	errors = io.write('/root/.bash_profile', rc.replace("'[\\u@\\h \\W]\\$ '", "'[\\e[31m\\u\\e[m@\\h \\W]\\$ '"))
 	# TODO Multi-user support
 	errors += io.write('/home/%s/.bashrc' % user, rc)
 	write_status(errors)
 
-	write_msg("Creating custom .bashrc.aliases file for all users...", 1)
+	write_msg("Creating custom '.bashrc.aliases' file for all users...", 1)
 	aliases = '#\n# ~/.bashrc.aliases\n#\n\n'
 	aliases += '# >> Entries added by ArchInstaller.py >>\n\n'
 	aliases += '# python aliases\n'
@@ -218,6 +216,8 @@ def custom_setup():
 	# TODO Multi-user support
 	errors += io.write('/home/%s/.bashrc.aliases' % user, aliases)
 	write_status(errors)
+
+	# TODO Setup custom GRUB2 theme
 
 
 
