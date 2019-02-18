@@ -32,7 +32,7 @@ from time import sleep
 
 # Virtual console keymap
 # NOTE See 'vconsole-keymaps.txt' for all options
-# def. 'en'
+# def. 'us'
 keymap = 'fi'
 
 # Virtual console font
@@ -145,7 +145,7 @@ def custom_setup():
 	write_msg("Installing custom packages...", 1)
 	errors = pkg.aur_install('c-lolcat')
 	errors += pkg.install('neofetch')
-	write_status(ret_val)
+	write_status(errors)
 
 	write_msg("Adding custom TTY colors to all user's .bashrc files...", 1)
 	rc = '#\n# ~/.bashrc\n#\n\n'
@@ -1070,7 +1070,7 @@ def sort_mirrors():
 		write_status(ret_val)
 
 		write_msg('Sorting mirrors using reflector, please wait...', 1)
-		ret_val = cmd.log('reflector --sort rate --number 25 --fastest 10 --age 24 --protocol https --save /etc/pacman.d/mirrorlist')
+		ret_val = cmd.log('reflector --verbose --sort rate --number 25 --fastest 10 --age 24 --protocol https --save /etc/pacman.d/mirrorlist')
 		write_status(ret_val)
 
 		# TODO Setup pacman hook to update later in chroot
@@ -1339,10 +1339,9 @@ def start_ch_install():
 	if ssh_server_type > 0: sshd_setup()
 	if use_lts_kernel: lts_kernel_setup()
 	bootloader_setup()
-	# TODO Webserver setup
+	# TODO Web server stack setup
 	#if web_server_type > 0: ...
 
-	# TODO Localtime setup
 	# TODO Xorg setup
 	# TODO Wayland support?
 	# TODO Video drv setup
