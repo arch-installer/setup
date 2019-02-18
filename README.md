@@ -33,7 +33,7 @@ DISCLAIMER: This is early software and will definitely change during the course 
 * Multi-user setup
 * Web server stack setup (LEMP / LAMP)
 * Xorg / wayland setup
-* Vidoe drivers setup
+* Video drivers setup
 * Power saving features setup
 * Desktop environment setup
 * Audio setup (Pulseaudio / ALSA)
