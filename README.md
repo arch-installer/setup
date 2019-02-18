@@ -1,5 +1,5 @@
 # ArchInstaller.py
-A semi-automatic & configurable Arch Linux installer script written in Python.
+A semi-automatic & configurable Arch Linux installer script written in Python.  
 DISCLAIMER: This is early software and will definitely change during the course of time.
 
 ## Development
