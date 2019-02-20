@@ -30,6 +30,8 @@ from time import sleep
 # Setup config variables
 ###############################
 
+# TODO Move to a 'config.py' file?
+
 # Virtual console keymap
 # NOTE See 'vconsole-keymaps.txt' for all options
 # def. 'us'
@@ -38,7 +40,7 @@ keymap = 'fi'
 # Virtual console font
 # NOTE See 'vconsole-fonts.txt' for all options
 # def. 'default'
-font = 'Lat2-Terminus16'
+font = 'ter-118n'  # Lat2-Terminus16
 
 # Other groups & packages to install w/ pacstrap on top of 'base' & 'python'
 # NOTE 'base-devel' is required for AUR support and will be installed automatically if enabled
@@ -71,7 +73,7 @@ LANG = 'en_US.UTF-8'
 # Fallback language ordered list e.g. 'en_AU:en_GB:en'
 # LANGUAGE setting under /etc/locale.conf
 # def. 'en_US.UTF-8'
-LANGUAGE = 'en_US.UTF-8'
+LANGUAGE = 'en_US'
 
 # Locale for sorting and regular expressions
 # LC_COLLATE setting under /etc/locale.conf
@@ -147,6 +149,8 @@ def custom_setup():
 	errors += pkg.install('neofetch')
 	write_status(errors)
 
+	# TODO Move to '.bashrc' file in repo, fetch here & apply to users instead?
+
 	write_msg("Adding custom bash config for all users...", 1)
 	rc = '#\n# ~/.bashrc\n#\n\n'
 	rc += "# If not running interactively, don't do anything\n"
@@ -179,6 +183,8 @@ def custom_setup():
 	# TODO Multi-user support
 	errors += io.write('/home/%s/.bashrc' % user, rc)
 	write_status(errors)
+
+	# TODO Move to '.bashrc.aliases' file in repo, fetch here & apply to users instead?
 
 	write_msg("Creating custom '.bashrc.aliases' file for all users...", 1)
 	aliases = '#\n# ~/.bashrc.aliases\n#\n\n'
@@ -216,6 +222,9 @@ def custom_setup():
 	# TODO Multi-user support
 	errors += io.write('/home/%s/.bashrc.aliases' % user, aliases)
 	write_status(errors)
+
+	# TODO Setup bash-completion package & add to bashrc
+	pkg.install('bash-completion')
 
 	# TODO Setup custom GRUB2 theme
 
@@ -664,12 +673,15 @@ def check_connectivity():
 		write_ln(color_str("§2ERROR: §0No network connectivity. Check your connection and try again."))
 		exit(5) # 5 = Network connectivity error
 
-
 # Load console font using 'setfont'
 def load_font():
 	global font
 	if font == '' or font == 'def' or font == 'default':
 		font = 'default8x16'
+	if font.startswith('ter-'):
+		write_msg('Installing the terminus-font package, please wait...', 1)
+		ret_val = pkg.install('terminus-font')
+		write_status(ret_val)
 	write_msg("Loading system font '%s'..." % font, 1)
 	ret_val = cmd.log('setfont ' + font)
 	write_status(ret_val)
@@ -866,8 +878,10 @@ def par_opt_handler(opt): # , format_par=-1
 	if not pause:
 		if fs_type != 'swap':
 			if opt == 'O':
+				write_ln()
 				write_msg(color_str('Where would you like to mount §7%s §0in the new system (e.g. §3/var§0)? §7>> ' % par))
 				mp = input().strip() # e.g. '/var'
+				write_ln()
 			elif opt == 'R':
 				mp = '/'
 			elif opt == 'B':
@@ -1084,16 +1098,27 @@ def sort_mirrors():
 
 # TODO Use global sys_root variable in the future
 def base_install(sys_root = '/mnt/'):
+	extra_pkgs = ''
+	extra_pkgs += 'sudo ' if user != '' else ''
+	extra_pkgs += '%s ' % base_pkgs if base_pkgs != '' else ''
+	extra_pkgs += 'terminus-font ' if font.startswith('ter-') else ''
+
+	# Userspace utilities for filesystems
+	blkid = cmd.output("blkid | grep -v '^/dev/loop' | grep -v '^/dev/sr0'")
+	extra_pkgs += 'btrfs-progs ' if '"btrfs"' in blkid else ''
+	extra_pkgs += 'exfat-utils ' if '"exfat"' in blkid else ''
+	extra_pkgs += 'ntfs-3g ' if '"ntfs"' in blkid else ''
+	extra_pkgs += 'reiserfsprogs progsreiserfs ' if '"reiserfs"' in blkid else ''
+	extra_pkgs += 'xfsprogs ' if '"xfs"' in blkid else ''
+
+	extra_pkgs = ' %s' % extra_pkgs.rstrip() if extra_pkgs != '' else ''
+
 	write_msg('Installing base system using pacstrap, please wait...', 1)
-	# TODO Only install sudo if 'user' is defined
-	ret_val = cmd.log('pacstrap %s base sudo python %s' % (sys_root, base_pkgs)) # TODO Report on progress
+	ret_val = cmd.log('pacstrap %s base python%s' % (sys_root, extra_pkgs)) # TODO Report on progress
 	write_status(ret_val)
 	if ret_val != 0: # Base install failure
 		write_ln(color_str('§2ERROR: §0Base system install failed. Check /tmp/setup.log for the details.'))
 		exit(10) # 10 = Base system install failure
-
-	# TODO Install userspace utilities w/ pacstrap for required filesystems, e.g. 'TYPE="reiserfs"' found in blkid => Install xfsprogs etc.
-	# (btrfs-progs xfsprogs)
 
 	write_msg('Generating static filesystem table...', 1)
 	ret_val = cmd.exec('genfstab -U %s >>%setc/fstab' % (sys_root, sys_root))
@@ -1121,8 +1146,6 @@ def start_chroot(sys_root = '/mnt/'):
 
 	cmd.suppress('%ssetup.log /tmp/' % sys_root)
 	#cmd.suppress('cp /tmp/setup.log %s' % sys_root)
-
-	# TODO Install full DE etc.
 
 # Chroot specific install steps
 
@@ -1156,7 +1179,6 @@ def locale_setup():
 		# UTF-8 locale not found OR full locale definition
 		if not found:
 			write_msg("Finding any matching locale for '%s' in /etc/locale.gen..." % locale, 1)
-			# TODO Uncomment first thing found starting with locale
 			ret_val = io.uncomment_ln('/etc/locale.gen', '%s' % locale)
 			write_status(ret_val)
 			if ret_val != 0:
@@ -1167,6 +1189,8 @@ def locale_setup():
 	write_status(ret_val)
 
 	write_msg('Creating /etc/locale.conf...', 1)
+
+	# TODO Expect '.UTF-8' locale IF no '.' in LANG etc.
 
 	# /etc/locale.conf
 	locale_conf = ''
@@ -1317,7 +1341,6 @@ def bootloader_extra_setup():
 
 
 
-
 def start_ch_install():
 	global hostname, mbr_grub_dev, cpu_type
 
@@ -1353,6 +1376,8 @@ def start_ch_install():
 	# TODO Printing & scanning setup
 	# TODO DVD support?
 	# TODO Wine setup?
+
+	# TODO On KDE make theming direcoties automatically e.g. '~/.local/share/plasma/look-and-feel/' etc
 
 	custom_setup()
 	if multibooting: bootloader_extra_setup()
@@ -1421,9 +1446,6 @@ cmd.log('umount -R /mnt')
 write_ln()
 write_msg('Loaded customized color scheme', 2)
 
-# Load font
-load_font()
-
 # Load keymap
 load_kbmap()
 
@@ -1432,6 +1454,9 @@ check_connectivity()
 
 # Refresh package databases
 pkg.refresh_dbs(False, 'Refreshing pacman package databases, please wait...')
+
+# Load font
+load_font()
 
 # Update used installer packages
 # TODO Check if the packages *actually* need to be updated (with pacman -Qs pkg?)
