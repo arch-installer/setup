@@ -1,0 +1,66 @@
+#
+# ~/.bashrc.aliases
+#
+
+# >> Entries added by ArchInstaller.py >>
+
+alias 'a'='alias'
+
+# ls
+a 'ls'='ls --color' # Colorize output
+a 'll'='ls -lh'     # Human-readable sizes
+a 'la'='ls -lAh'    # -=-
+a 'sl'='ls'
+a 'l'='ls'
+a 'dir'='ls'
+
+# clear
+a 'cls'='clear'
+a 'csl'='clear'
+a 'clr'='clear'
+a 'clera'='clear'
+
+# Python
+a 'py3'='python3'
+a 'py2'='python2'
+a 'py'='py3'
+
+# Networking
+a 'traceroute'='tracepath'
+a 'trr'='tracepath'
+a 'trp'='tracepath'
+a 'ifconfig'='ip a'
+a 'ipconfig'='ip a'
+a 'route'='ip route'
+a 'arp'='ip neigh'
+a 'iptunnel'='ip tunnel'
+a 'nameif'='ip link set name'
+a 'ifrename'='nameif'
+a 'ipmaddr'='ip maddr'
+a 'netstat'='ss'
+
+# Misc aliases
+a 'pacman'='pacman --color auto' # Colorize output
+a 'yay'='yay --color auto'       # -=-
+a 'egrep'='egrep --color auto'   # -=-
+a 'fgrep'='fgrep --color auto'   # -=-
+a 'grep'='grep --color auto'     # -=-
+a 'df'='df -h'                   # Human-readable sizes
+a 'free'='free -m'               # -=-
+a 'vi'='vim'
+a 'po'='popd'
+a 'pu'='pushd'
+a 'md'='mkdir'
+a 'up'='cd ..'
+a 'cd..'='cd ..'
+a 'quit'='exit'
+
+# TODO top=>htop if applicable
+
+# Rainbow screen & neofetch when not in a TTY
+if [[ "$TERM" != "linux" ]]; then
+	a 'screenfetch'='screenfetch | lolcat'
+	a 'neofetch'='neofetch | lolcat'
+fi
+
+# << End of entries added by ArchInstaller.py <<
