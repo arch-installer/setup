@@ -42,9 +42,9 @@ a 'netstat'='ss'
 # Misc aliases
 a 'pacman'='pacman --color auto' # Colorize output
 a 'yay'='yay --color auto'       # -=-
-a 'egrep'='egrep --color auto'   # -=-
-a 'fgrep'='fgrep --color auto'   # -=-
-a 'grep'='grep --color auto'     # -=-
+a 'egrep'='egrep --color'        # -=-
+a 'fgrep'='fgrep --color'        # -=-
+a 'grep'='grep --color'          # -=-
 a 'df'='df -h'                   # Human-readable sizes
 a 'free'='free -m'               # -=-
 a 'vi'='vim'
