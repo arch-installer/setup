@@ -1,5 +1,5 @@
 " Show line numbers
-set numbers
+set number
 
 " Don't wrap text
 set nowrap
