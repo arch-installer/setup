@@ -9,22 +9,9 @@
 
 # Setup terminal prompt
 user_col='2' # Username color depending on root access
-(( EUID != 0 )) && user_col='1'
-PS1='[\[\e[3${user_col}m\]\u\[\e[m\]@\[\e[36m\]\h\[\e[m\] \[\e[33m\]\W\[\e[m\]\$ ' # '[\u@\h \W]\$ '
+(( EUID == 0 )) && user_col='1'
+PS1='[\[\e[3'$user_col'm\]\u\[\e[m\]@\[\e[36m\]\h\[\e[m\] \[\e[33m\]\W\[\e[m\]]\$ ' # '[\u@\h \W]\$ '
 unset user_col
-
-# Custom TTY colors
-if [[ "$TERM" = "linux" ]]; then
-	echo -en '\e]P00C0C0C' # Black
-	echo -en '\e]P1AF1923' # Red
-	echo -en '\e]P269A62A' # Green
-	echo -en '\e]P3E68523' # Yellow
-	echo -en '\e]P42935B1' # Blue
-	echo -en '\e]P57C1FA1' # Magenta
-	echo -en '\e]P62397F5' # Cyan
-	echo -en '\e]P79E9E9E' # White
-	clear # For avoiding coloring artifacts
-fi
 
 # Load aliases from .bashrc.aliases
 [[ -e ~/.bashrc.aliases ]] && source ~/.bashrc.aliases

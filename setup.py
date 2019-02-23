@@ -675,6 +675,7 @@ def partition(tool_to_use=''):
 	else:
 		write_msg(color_str('Partitioning command line (e.g. §4fdisk §7/dev/'))
 	write(color_str("§7sda§0) §7>> "))
+	in_cmd = ''
 	in_cmd = input().strip()
 	if in_cmd != '':
 		if tool_to_use != '':
@@ -703,6 +704,7 @@ def sel_par_tool(hide_guide=False):
 
 	write(color_str('/§7O§0) §7>> '))
 
+	sel = ''
 	sel = input().upper().strip()
 	if sel != '':
 		if sel == 'G':
@@ -764,6 +766,7 @@ def par_opt_handler(opt): # , format_par=-1
 	if opt == 'O':
 		write(color_str('§7/dev/'))
 	write(color_str('§7sda1§0)? §7>> '))
+	par = ''
 	par = input().strip() # sda1
 	# TODO Check if input device is ACTUALLY valid
 	if len(par) < 3: # 4?
@@ -776,6 +779,7 @@ def par_opt_handler(opt): # , format_par=-1
 	#      'Would you like to use /dev/sda3 for other purpose (y/N)? >> '
 	#if format_par == -1:
 	write_msg(color_str('Would you like to §2format §7%s §0(§2y§0/§3N§0)? §7>> ' % par))
+	ans = ''
 	ans = input().upper().replace('YES', 'Y')
 	#elif format_par == 1:
 	#	ans = 'Y'
@@ -842,6 +846,7 @@ def par_opt_handler(opt): # , format_par=-1
 			if opt == 'O':
 				write_ln()
 				write_msg(color_str('Where would you like to mount §7%s §0in the new system (e.g. §3/var§0)? §7>> ' % par))
+				mp = ''
 				mp = input().strip() # e.g. '/var'
 				write_ln()
 			elif opt == 'R':
@@ -980,7 +985,7 @@ def list_used_pars(hide_guide=False):
 		write('S/')
 	write(color_str('O/L/I/F) §7>> '))
 
-	sel = '' # TODO Check if fixes empty input loop to previous option?
+	sel = ''
 	sel = input().upper().strip()
 	if sel != '':
 		# Partition identification
@@ -1012,6 +1017,7 @@ def list_used_pars(hide_guide=False):
 	if boot_mode == 'UEFI' and not '/efi:' in mounts:
 		write_ln()
 		write_msg(color_str('Would you like to continue without mounting a §3/efi §7partition §0(§2y§0/§3N§0)? §7>> '))
+		ans = ''
 		ans = input().upper().replace('YES', 'Y')
 		if ans != 'Y':
 			mounting_menu()
