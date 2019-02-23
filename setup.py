@@ -8,7 +8,7 @@
 #
 # Description : My personal Arch Linux installer script | Python rewrite
 #
-# License     : MIT (https://github.com/JamiKettunen/ArchInstaller.py/blob/master/LICENSE)
+# License     : MIT (https://git.io/fhF8b)
 #
 # Reference   : https://wiki.archlinux.org/index.php/Installation_guide
 #
@@ -40,12 +40,12 @@ keymap = 'fi'
 # Virtual console font
 # NOTE See 'vconsole-fonts.txt' for all options
 # def. 'default'
-font = 'ter-118n'  # Lat2-Terminus16
+font = 'ter-118n' # ter-118n
 
 # Other groups & packages to install w/ pacstrap on top of 'base' & 'python'
 # NOTE 'base-devel' is required for AUR support and will be installed automatically if enabled
 # def. ''
-base_pkgs = 'vim htop'
+base_pkgs = 'vim htop unzip p7zip unrar'
 
 # Whether to enable Network Time Protocol time synchronization
 # def. 'True'
@@ -134,6 +134,8 @@ use_lts_kernel = False
 # def. 'False'
 multibooting = False
 
+# TODO Systemd-boot alternative to GRUB?
+
 
 
 ###############################
@@ -141,92 +143,49 @@ multibooting = False
 ###############################
 
 def custom_setup():
-	# Use 'pass' to ignore the function
+	# Uncomment 'pass' to ignore the function
 	#pass
 
+	# Install custom packages
 	write_msg("Installing custom packages...", 1)
-	errors = pkg.aur_install('c-lolcat')
-	errors += pkg.install('neofetch')
+	errors = pkg.install('bash-completion neofetch')
+	errors += pkg.aur_install('c-lolcat')
 	write_status(errors)
 
-	# TODO Move to '.bashrc' file in repo, fetch here & apply to users instead?
+	# Custom GRUB2 theme
+	write_msg("Installing custom 'poly-dark' GRUB2 theme...", 1)
+	ret_val = cmd.exec('cd && git clone https://github.com/shvchk/poly-dark.git &>/dev/null && mkdir -p /boot/grub/themes && mv poly-dark /boot/grub/themes && grep "GRUB_THEME=" /etc/default/grub &>/dev/null && sed -i "/GRUB_THEME=/d" /etc/default/grub && echo "GRUB_THEME=/boot/grub/themes/poly-dark/theme.txt" >> /etc/default/grub && grub-mkconfig -o /boot/grub/grub.cfg &>/dev/null')
+	write_status(ret_val)
 
-	write_msg("Adding custom bash config for all users...", 1)
-	rc = '#\n# ~/.bashrc\n#\n\n'
-	rc += "# If not running interactively, don't do anything\n"
-	rc += "[[ $- != *i* ]] && return\n\n"
-	# TODO Custom prompt setup?
-	#rc += '\n\n# >> Entries added by ArchInstaller.py >>\n\n'
-	rc += "PS1='[\\u@\\h \\W]\\$ '\n\n"
-	rc += '# >> Entries added by ArchInstaller.py >>\n\n'
-	rc += '# Custom TTY colors\n'
-	rc += 'if [ "$TERM" = "linux" ]; then\n'
-	# TODO 16 color support?
-	rc += "\techo -en '\\e]P00C0C0C' # Black\n"
-	rc += "\techo -en '\\e]P1AF1923' # Red\n"
-	rc += "\techo -en '\\e]P269A62A' # Green\n"
-	rc += "\techo -en '\\e]P3E68523' # Yellow\n"
-	rc += "\techo -en '\\e]P42935B1' # Blue\n"
-	rc += "\techo -en '\\e]P57C1FA1' # Magenta\n"
-	rc += "\techo -en '\\e]P62397F5' # Cyan\n"
-	rc += "\techo -en '\\e]P79E9E9E' # White\n"
-	rc += '\tclear # For avoiding coloring artifacts\n'
-	rc += 'fi\n\n'
-	rc += '# Load aliases from .bashrc.aliases\n'
-	rc += 'if [ -e ~/.bashrc.aliases ]; then\n'
-	rc += '\tsource ~/.bashrc.aliases\n'
-	rc += 'fi\n'
-	rc += '\n# << End of entries added by ArchInstaller.py <<'
-
-	# TODO Use append function again once fixed?
-	errors = io.write('/root/.bash_profile', rc.replace("'[\\u@\\h \\W]\\$ '", "'[\\e[31m\\u\\e[m@\\h \\W]\\$ '"))
 	# TODO Multi-user support
-	errors += io.write('/home/%s/.bashrc' % user, rc)
-	write_status(errors)
 
-	# TODO Move to '.bashrc.aliases' file in repo, fetch here & apply to users instead?
+	# Create some directories
+	cmd.log('mkdir -p ~/.local/bin ~/.vim/colors') # Root
+	if user != '':
+		cmd.log('$ mkdir -p ~/.local/bin ~/.vim/colors') # Users
 
+	# Custom ~/.bash_profile
+	write_msg("Creating custom '.bash_profile' file for all users...", 1)
+	ret_val = cmd.log('curl https://git.io/fhF2b -Lso ~/§f && cd /home/§u/ && cp ~/§f . && chown §u:users §f; cd'.replace('§u', user).replace('§f', '.bash_profile'))
+	write_status(ret_val)
+
+	# Custom ~/.bashrc
+	write_msg("Creating custom '.bashrc' file for all users...", 1)
+	ret_val = cmd.log('curl https://git.io/fhF2p -Lso ~/§f && cd /home/§u/ && cp ~/§f . && chown §u:users §f; cd'.replace('§u', user).replace('§f', '.bashrc'))
+	write_status(ret_val)
+
+	# Custom ~/.bashrc.aliases
 	write_msg("Creating custom '.bashrc.aliases' file for all users...", 1)
-	aliases = '#\n# ~/.bashrc.aliases\n#\n\n'
-	aliases += '# >> Entries added by ArchInstaller.py >>\n\n'
-	aliases += '# python aliases\n'
-	aliases += 'alias py3=python3\n'
-	aliases += 'alias py2=python2\n'
-	aliases += 'alias py=py3\n\n'
-	aliases += '# clear aliases\n'
-	aliases += 'alias cls=clear\n'
-	aliases += 'alias clr=clear\n'
-	aliases += 'alias clera=clear\n'
-	aliases += 'alias csl=clear\n'
-	#aliases += 'alias c=clear\n\n'
-	aliases += '# ls aliases\n'
-	aliases += 'alias ls="ls -h --color"\n'
-	#aliases += 'alias ls="ls -h --color | lolcat"\n'
-	aliases += 'alias ll="ls -l"\n'
-	aliases += 'alias la="ls -la"\n'
-	aliases += 'alias dir=ls\n'
-	aliases += 'alias l=ls\n\n'
-	aliases += '# misc aliases\n'
-	aliases += 'alias "cd.."="cd .."\n'
-	aliases += 'alias md=mkdir\n'
-	aliases += 'alias quit=exit\n'
-	#aliases += 'alias q=exit\n\n'
-	aliases += '# Rainbow screen & neofetch when not in a TTY\n'
-	aliases += 'if [ "$TERM" != "linux" ]; then\n'
-	aliases += '\talias screenfetch="screenfetch | lolcat"\n'
-	aliases += '\talias neofetch="neofetch | lolcat"\n'
-	aliases += 'fi\n'
-	aliases += '\n# << End of entries added by ArchInstaller.py <<'
+	ret_val = cmd.log('curl https://git.io/fhF2h -Lso ~/§f && cd /home/§u/ && cp ~/§f . && chown §u:users §f; cd'.replace('§u', user).replace('§f', '.bashrc.aliases'))
+	write_status(ret_val)
 
-	errors = io.write('/root/.bashrc.aliases', aliases)
-	# TODO Multi-user support
-	errors += io.write('/home/%s/.bashrc.aliases' % user, aliases)
+	# Vim custom setup
+	write_msg("Creating custom '.vimrc' file for all users...", 1)
+	errors = cmd.log('cd ~/.vim/colors/ && curl https://git.io/fhFEE -Lso §f && cp §f /home/§u/.vim/colors/ && chown §u:users §f; cd'.replace('§u', user).replace('§f', 'molokai.vim')) # molokai.vim
+	errors += cmd.log('curl https://git.io/fhF2j -Lso ~/§f && cd /home/§u/ && cp ~/§f . && chown §u:users §f; cd'.replace('§u', user).replace('§f', '.vimrc'))
 	write_status(errors)
 
-	# TODO Setup bash-completion package & add to bashrc
-	pkg.install('bash-completion')
-
-	# TODO Setup custom GRUB2 theme
+	# TODO Remove files from root users path (install.txt, setup.py, )
 
 
 
@@ -555,15 +514,18 @@ class cmd:
 	# Run a command on the shell with an optional io stream
 	# io_stream_type: 0 = none, 1 = stdout, 2 = logged, 3 = all_supressed
 	# Returns: command exit code / output when io_stream_type=2
+	# TODO Support multiple users
 	@staticmethod
-	def exec(command, io_stream_type=0):
+	def exec(command, exec_user='', io_stream_type=0):
 		user_exec = command.startswith('$ ')
 		exec_cmd = command
 
 		if user_exec:
+			if exec_user == '':
+				exec_user = user
 			command = command[2:] # Remove '$ ' from user_exec commands
 			if user != '':
-				exec_cmd = "sudo -i -u %s -H bash -c '%s'" % (user, command)
+				exec_cmd = "sudo -i -u %s -H bash -c '%s'" % (exec_user, command)
 			else:
 				log('[setup.py:cmd.exec(%s)] WARN: Ignoring "%s" execution, since no user was defined.' % (str(io_stream_type), command))
 				return 1
@@ -592,20 +554,20 @@ class cmd:
 	# New lines are seperated with a '\n'
 	# Returns: command exit code
 	@staticmethod
-	def output(command):
-		return cmd.exec(command, 1)
+	def output(command, exec_user=''):
+		return cmd.exec(command, exec_user, 1)
 
 	# Run a command on the shell while logging all it's output
 	# Returns: command exit code
 	@staticmethod
-	def log(command):
-		return cmd.exec(command, 2)
+	def log(command, exec_user=''):
+		return cmd.exec(command, exec_user, 2)
 
 	# Run a command on the shell while supressing all it's output
 	# Returns: command exit code
 	@staticmethod
-	def suppress(command):
-		return cmd.exec(command, 3)
+	def suppress(command, exec_user=''):
+		return cmd.exec(command, exec_user, 3)
 
 
 
@@ -1018,6 +980,7 @@ def list_used_pars(hide_guide=False):
 		write('S/')
 	write(color_str('O/L/I/F) §7>> '))
 
+	sel = '' # TODO Check if fixes empty input loop to previous option?
 	sel = input().upper().strip()
 	if sel != '':
 		# Partition identification
@@ -1033,9 +996,9 @@ def list_used_pars(hide_guide=False):
 			write('\nPress ENTER to continue...')
 			input()
 		else:
-			if boot_mode == 'UEFI' and 'root:' not in mounts and sel == 'E':
-				write_ln('\n' + color_str('§2ERROR: §0Please mount a root partition before mounting /efi!'))
-				write('Press ENTER to continue...')
+			if 'root:' not in mounts and not (sel == 'R' or sel == 'S' or sel == 'O'):
+				write_ln('\n' + color_str('§2ERROR: §0Please mount a root partition before continuing!'))
+				write('\nPress ENTER to continue...')
 				input()
 			else:
 				# TODO Don't allow selections that are already mounted!! (e.g. /,/efi,swap etc)
@@ -1377,6 +1340,9 @@ def start_ch_install():
 	# TODO DVD support?
 	# TODO Wine setup?
 
+	# TODO Query for BATTERY to install TLP etc
+	# TODO Query for DVD/CD drive to install bluray etc support
+
 	# TODO On KDE make theming direcoties automatically e.g. '~/.local/share/plasma/look-and-feel/' etc
 
 	custom_setup()
@@ -1433,15 +1399,14 @@ if debug:
 # Load color scheme
 load_colors()
 
+# TODO Add '-A' flag to automate install fully, install in specified mountpoint, skip mounting & partitioning etc
+
 write_msg(color_str('Arch §7Linux '))
 write(color_str('§4%s §0live environment was detected. Press ENTER to continue...' % boot_mode))
 if not debug:
 	input()
 else:
 	write_ln()
-
-# Some preparation (ONLY DEBUG?)
-cmd.log('umount -R /mnt')
 
 write_ln()
 write_msg('Loaded customized color scheme', 2)

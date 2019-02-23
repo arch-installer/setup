@@ -8,7 +8,9 @@
 # >> Entries added by ArchInstaller.py >>
 
 # Setup terminal prompt
-PS1='[\u@\h \W]\$ '
+user_col = (( EUID != 0 )) && '2' || '1' # Username color depending on root access
+PS1='[\[\e[3${user_col}m\]\u\[\e[m\]@\[\e[36m\]\h\[\e[m\] \[\e[33m\]\W\[\e[m\]\$ ' # '[\u@\h \W]\$ '
+unset user_col
 
 # Custom TTY colors
 if [[ "$TERM" = "linux" ]]; then
@@ -36,7 +38,7 @@ export PATH=$PATH:~/.local/bin
 export HISTCONTROL=ignoredups # No duplicate command history entries
 shopt -s histappend           # Append rather than overwrite history file
 shopt -s xpg_echo             # Make echo expand backslash-escape sequences
-shopt -s progcomp_alias       # Try alias expanding for completions
+shopt -s progcomp_alias       # Try alias expanding for programmable completions
 shopt -s autocd               # Automatically cd into typed directories
 complete -cf sudo             # Sudo completions
 
