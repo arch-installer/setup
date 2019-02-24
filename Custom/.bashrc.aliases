@@ -42,18 +42,21 @@ a 'netstat'='ss'
 # Misc aliases
 a 'pacman'='pacman --color auto' # Colorize output
 a 'yay'='yay --color auto'       # -=-
-a 'egrep'='egrep --color'        # -=-
-a 'fgrep'='fgrep --color'        # -=-
 a 'grep'='grep --color'          # -=-
+a 'egrep'='grep -E'              # -=-
+a 'fgrep'='grep -F'              # -=-
 a 'df'='df -h'                   # Human-readable sizes
 a 'free'='free -m'               # -=-
-a 'vi'='vim'
 a 'po'='popd'
 a 'pu'='pushd'
 a 'md'='mkdir'
 a 'up'='cd ..'
 a 'cd..'='cd ..'
 a 'quit'='exit'
+
+# Point vi => vim if applicable
+command -v vim >/dev/null
+(( $? == 0 )) && a 'vi'='vim'
 
 # Point top => htop if applicable
 command -v htop >/dev/null

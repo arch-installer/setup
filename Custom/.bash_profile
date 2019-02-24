@@ -2,6 +2,8 @@
 # ~/.bash_profile
 #
 
+# >> Entries added by ArchInstaller.py >>
+
 # Custom TTY colors
 if [[ "$TERM" = "linux" ]]; then
 	echo -en '\e]P00C0C0C' # Black
@@ -14,6 +16,8 @@ if [[ "$TERM" = "linux" ]]; then
 	echo -en '\e]P79E9E9E' # White
 	clear # For avoiding coloring artifacts
 fi
+
+# << End of entries added by ArchInstaller.py <<
 
 # If .bashrc is present, execute it on login
 [[ -f ~/.bashrc ]] && . ~/.bashrc

@@ -10,7 +10,7 @@
 # Setup terminal prompt
 user_col='2' # Username color depending on root access
 (( EUID == 0 )) && user_col='1'
-PS1='[\[\e[3'$user_col'm\]\u\[\e[m\]@\[\e[36m\]\h\[\e[m\] \[\e[33m\]\W\[\e[m\]]\$ ' # '[\u@\h \W]\$ '
+PS1='\[\e[3'$user_col'm\]\u\[\e[m\]@\[\e[36m\]\h\[\e[m\] \[\e[33m\]\W\[\e[m\] \$ ' # '\u@\h \W \$ '
 unset user_col
 
 # Load aliases from .bashrc.aliases
