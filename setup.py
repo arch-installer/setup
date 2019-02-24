@@ -510,7 +510,7 @@ def check_env():
 				base_pkgs
 			except NameError:
 				# TODO Replace with actual URL to config.py
-				print(file_msg.replace('§f', 'config.py').replace('§c', 'curl https://git.io/... -Lso config.py'))
+				print(file_msg.replace('§f', 'config.py').replace('§c', 'curl https://git.io/fhbgV -Lso config.py'))
 				exit(4) # 4 = config.py not loaded
 
 		else: # Read failed => Assume chroot environment
