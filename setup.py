@@ -119,11 +119,16 @@ script_root = script_path.rsplit('/', 1)[0] # Directory path of script e.g. '/ro
 boot_mode = 'BIOS/CSM'    # 'BIOS/CSM' / 'UEFI'
 cpu_type = ''             # 'intel' / 'amd'
 in_chroot = False         # Inside chroot?
-vm_env = ''               # Virtualized env e.g. '', 'vbox', 'vmware', 'other'
-bat_present = False       # Battery present?
-disc_tray_present = False # Disc tray present?
-bt_present = False        # BT device present?
+vm_env = ''               # Virtualized env: '','vbox','vmware','other'
+bat_present = False       # Any battery present?
+disc_tray_present = False # Any disc tray present?
+bt_present = False        # Any BT device present?
 args = ''                 # All arguments in one string
+pkg_cache_dev = ''        # Device used for /pkgcache
+mbr_grub_dev = ''         # GRUB install device on MBR systems e.g. '/dev/sda'
+mounts = ''               # Current mounts e.g. '/efi:/dev/sda1,root:/dev/sda2'
+par_menu_visit_counter = 0
+mount_menu_visit_counter = 0
 
 
 
@@ -347,9 +352,6 @@ class io:
 # Package management
 
 class pkg:
-	# TODO Add '--cache-dir' when os.path.exists('/(mnt/)pkgcache')
-	# TODO Cache AUR packages too
-
 	# TODO Progress reporting messages
 	# Refresh local package database cache
 	# Quit script execution on error
@@ -645,8 +647,6 @@ def sel_par_tool(hide_guide=False):
 
 	# TODO Don't allow to continue without having atleast 1 partition on the disk (check lsblk output lines count)
 
-par_menu_visit_counter = 0
-
 def partitioning_menu():
 	global par_menu_visit_counter
 	print_header('Disk Partitioning')
@@ -662,8 +662,6 @@ def partitioning_menu():
 def mount_par(blk_dev, mount_point='/'):
 	cmd.log('mkdir -p /mnt%s' % mount_point)
 	return cmd.log('mount %s /mnt%s' % (blk_dev, mount_point))
-
-mbr_grub_dev = ''
 
 def par_opt_handler(opt):
 	global mbr_grub_dev
@@ -818,6 +816,9 @@ def par_opt_handler(opt):
 						cmd.log('mv /etc/pacman.conf.bak /etc/pacman.conf')
 						cmd.log('rm -rf /mnt/pkgcache')
 						cmd.log('umount /mnt/pkgcache')
+					else:
+						global pkg_cache_dev
+						pkg_cache_dev = par # e.g. '/dev/sdb1'
 			else:
 				write_msg('Mounting cancelled due to an invalid mountpoint.', 4)
 				pause = True
@@ -833,8 +834,6 @@ def par_opt_handler(opt):
 		input()
 	else:
 		time.sleep(0.15)
-
-mounts = ''
 
 def write_par_mount(key='E', mount='/efi', device='/dev/sda1', condition=False, max_len=9, start_space_count=6):
 	if key == '':
@@ -926,10 +925,10 @@ def list_used_pars(hide_guide=False):
 
 	# '>> Selection (B/E/R/H/S/O/L/I/F) >> '
 	write_msg('Selection (')
-	if boot_mode == 'UEFI' and not '/efi:' in mounts:
-		write('E/')
 	if not 'root:' in mounts:
 		write('R/')
+	if boot_mode == 'UEFI' and not '/efi:' in mounts:
+		write('E/')
 	if not '/boot:' in mounts:
 		write('B/')
 	if not '/home:' in mounts:
@@ -978,8 +977,6 @@ def list_used_pars(hide_guide=False):
 		ans = input().upper().replace('YES', 'Y')
 		if ans != 'Y':
 			mounting_menu()
-
-mount_menu_visit_counter = 0
 
 def mounting_menu():
 	global mount_menu_visit_counter
@@ -1043,9 +1040,18 @@ def base_install(sys_root = '/mnt/'):
 		write_ln(color_str('§2ERROR: §0Base system install failed. Check /tmp/setup.log for the details.'))
 		exit(11) # 11 = Base system install failure
 
+	# Umount cache device (most likely external) to avoid adding to fstab
+	if os.path.exists(sys_root + 'pkgcache'):
+		cmd.log('umount %spkgcache' % sys_root)
+
 	write_msg('Generating static filesystem table...', 1)
+	# TODO Do not generate entry for cache drive
 	ret_val = cmd.exec('genfstab -U %s >>%setc/fstab' % (sys_root, sys_root))
 	write_status(ret_val)
+
+	# Remount cache device if specified
+	if pkg_cache_dev != '':
+		cmd.log('mount %s %spkgcache' % (pkg_cache_dev, sys_root))
 
 # Continue setup in chroot...
 
