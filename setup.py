@@ -144,7 +144,7 @@ args = ''                 # All arguments in one string
 mbr_grub_dev = ''         # GRUB install device on MBR systems e.g. '/dev/sda'
 mounts = ''               # Current mounts e.g. '/efi:/dev/sda1,root:/dev/sda2'
 video_drv = ''            # e.g. 'nvidia','nvidia-340','noveau+mesa','amdgpu+mesa','intel+mesa','bumblebee' etc
-use_lts_kernel = ''
+kernel_suffix = ''
 try:
 	kernel_suffix = ('-lts' if use_lts_kernel else '')
 except:
