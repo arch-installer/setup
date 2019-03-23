@@ -14,7 +14,7 @@ Global {
   setdocktype=1
   setpartialstrut=1
   usefontcolor=0
-  fontcolor=#ffffff
+  fontcolor=#ebebeb
   usefontsize=0
   fontsize=10
   background=0
@@ -39,7 +39,7 @@ Plugin {
       command=arch-logout
       image=system-shutdown
     }
-    image=/usr/share/lxde/images/arch-icon.png
+    image=/usr/share/lxpanel/images/arch-icon.png
   }
 }
 Plugin {
@@ -56,9 +56,6 @@ Plugin {
     }
     Button {
       id=lxterminal.desktop
-    }
-    Button {
-      id=gnome-terminal.desktop
     }
   }
 }
