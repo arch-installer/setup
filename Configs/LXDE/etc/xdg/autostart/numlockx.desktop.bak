@@ -1,0 +1,6 @@
+[Desktop Entry] 
+Type=Application
+Name=numlockx
+Comment=Enable numlock on system startup
+StartupNotify=false
+Exec=numlockx
