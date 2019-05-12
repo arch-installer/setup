@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 # ArchInstaller.py
 # ----------------
@@ -19,12 +19,7 @@ import os, sys, subprocess, time, re, random
 # Import configured user variables
 try:
 	from config import *
-except ModuleNotFoundError:
-	# TODO Move error message here?
-	pass
-
-# TODO Create a .gz package to gunzip & include *.py files: # gunzip archinstaller.py.gz
-# TODO Report device formatting, package installing, pacstrap etc progress
+except ModuleNotFoundError: pass
 
 
 
@@ -32,21 +27,35 @@ except ModuleNotFoundError:
 # Custom setup 
 ###############################
 
-# TODO Find a way to seperate to 'custom.py'
-
 def custom_setup():
-	#pass
+	# ------------ Custom packages setup
 
 	# Install custom packages
 	write_msg("Installing custom packages...", 1)
-	errors = Pkg.install('bash-completion neofetch')
-	errors += Pkg.aur_install('c-lolcat')
+	errors = Pkg.install('bash-completion psutils gnu-netcat neofetch arch-install-scripts') # tokei youtube-dl
+	errors += Pkg.install('--asexplicit rhash', False)
+	if de != '':
+		errors += Pkg.install('noto-fonts-emoji noto-fonts-cjk')
+
+	ret_val = Cmd.suppress('pacman -Qs htop')
+	if ret_val == 0: errors += Pkg.install('lsof strace') # Install htop optdeps
+
+	if enable_aur:
+		errors += Pkg.aur_install('c-lolcat downgrade capitaine-cursors') # 
 	write_status(errors)
 
-	# Custom GRUB2 theme
-	write_msg("Installing custom 'poly-dark' GRUB2 theme...", 1)
-	ret_val = Cmd.exec('cd /tmp && git clone https://github.com/shvchk/poly-dark.git &>/dev/null && mkdir -p /boot/grub/themes && mv poly-dark /boot/grub/themes && grep "GRUB_THEME=" /etc/default/grub &>/dev/null && sed -i "/GRUB_THEME=/d" /etc/default/grub && echo "GRUB_THEME=/boot/grub/themes/poly-dark/theme.txt" >>/etc/default/grub && grub-mkconfig -o /boot/grub/grub.cfg &>/dev/null')
-	write_status(ret_val)
+	# ------------ GRUB theme setup (when multibooting)
+
+	if multibooting:
+		write_msg("Installing custom 'poly-dark' GRUB theme...", 1)
+		errors = Cmd.exec('cd /tmp && git clone https://github.com/shvchk/poly-dark.git &>/dev/null && mkdir -p /boot/grub/themes && mv poly-dark /boot/grub/themes')
+		Cmd.log(f'chmod 770 {grub_conf}')
+		IO.replace_ln(grub_conf, '#GRUB_THEME=', 'GRUB_THEME="/boot/grub/themes/poly-dark/theme.txt"')
+		Cmd.log(f'chmod 644 {grub_conf}')
+		errors += update_grub()
+		write_status(ret_val)
+
+	# ------------ dotfiles setup
 
 	user_cmds = '' # §u = User, §t = TargetUserHomePath, §s = SourcePath, §g = UserGroup, §f = FileName
 
@@ -57,11 +66,8 @@ def custom_setup():
 			Cmd.log('$ mkdir -p ~/.local/bin ~/.vim/colors', user) # Users
 			restricted = User.is_restricted(user)
 			group = ('restricted' if restricted else 'users')
-			# TODO Use '&&' again (probably need some sort of brackets)
 			user_cmds += '; cd /home/§u/§t; cp §s .; chown §u:§g §f'.replace('§u', user).replace('§g', group)
 	#write_status(ret_val)
-
-	# TODO Use global config files instead after making backups?
 
 	# Custom ~/.bash_profile
 	write_msg("Creating custom '.bash_profile' file for all users...", 1)
@@ -78,34 +84,89 @@ def custom_setup():
 	ret_val = Cmd.log(f'curl https://git.io/fhNsg -Lso §s{user_cmds}; cd'.replace('§t', '').replace('§s', '~/§f').replace('§f', '.bashrc.aliases'))
 	write_status(ret_val)
 
+	# Custom ~/.xinitrc
+	if de == 'i3':
+		write_msg("Creating custom '.xinitrc' file for all users...", 1)
+		ret_val = Cmd.log(f'curl https://git.io/fhhQY -Lso §s{user_cmds}; cd'.replace('§t', '').replace('§s', '~/§f').replace('§f', '.xinitrc'))
+		write_status(ret_val)
+
 	# Vim custom setup
 	write_msg("Creating custom '.vimrc' file for all users...", 1)
 	errors = Cmd.log(f'curl https://git.io/fhNs2 -Lso §s{user_cmds}; cd'.replace('§t', '').replace('§s', '~/§f').replace('§f', '.vimrc'))
 	errors += Cmd.log(f'curl https://git.io/fhNs6 -Lso §s{user_cmds}; cd'.replace('§t', '.vim/colors/').replace('§s', '~/.vim/colors/§f').replace('§f', 'molokai.vim'))
 	write_status(errors)
 
-	# TODO Add proton config options & system file mofidications
-	# https://github.com/ValveSoftware/Proton#runtime-config-options
+	# ------------ WiFi + BT setup
 
-	# TODO Also check if BCM or Broadcom in dmesg etc. to further identify system hw
-	#if vm_env == '':
-		#write_msg('Installing proper support for BCM WiFi + BT combo card, please wait...', 1)
-		#errors = Pkg.install(f'linux{kernel_suffix}-headers dkms crda broadcom-wl-dkms')
-		#write_msg('Installing proper support for RTL 8192 WiFi card, please wait...', 1)
-		#errors = Pkg.install(f'linux{kernel_suffix}-headers dkms crda')
-		#IO.uncomment_ln('/etc/conf.d/wireless-regdom', 'WIRELESS_REGDOM="FI"')
-		#errors += Pkg.aur_install('bcm20702a1-firmware')
-		#write_status(errors)
+	if vm_env == '':
+		bcm_install = Cmd.suppress('lspci | grep -i bcm4352') == 0
+		if bcm_install:
+			# 'RTL 8192 WiFi card': crda
+			write_msg('Installing proper support for BCM4352 WiFi + BT combo card, please wait...', 1)
+			errors = Pkg.install(f'crda linux{kernel_suffix}-headers dkms broadcom-wl-dkms')
+			errors += Pkg.aur_install('bcm20702a1-firmware')
 
-	# TODO Custom tlp config?
+			IO.uncomment_ln('/etc/conf.d/wireless-regdom', 'WIRELESS_REGDOM="FI"')
+			write_status(errors)
+
+	# ------------ Applications setup
+
+		write_msg('Installing custom applications, please wait...', 1)
+		errors = 0
+
+		if de == 'i3':
+			errors += Pkg.install('file-roller seahorse nemo nemo-fileroller nemo-image-converter nemo-preview nemo-seahorse nemo-share djvulibre libspectre cinnamon-translations ffmpegthumbnailer')
+
+		# Steam
+		if enable_multilib:
+			errors += Pkg.install('steam steam-native-runtime wqy-zenhei lib32-libldap')
+			apps = '/usr/share/applications'
+			Cmd.log(f'mv {apps_path}/steam-native.desktop {apps_path}/steam-native.desktop.bak')
+			IO.replace_ln(f'{apps_path}/steam.desktop', 'Name=', 'Name=Steam')
+
+		# Discord
+		errors += Cmd.log('$ cd /tmp; yay -G libc++ && cd libc++ && makepkg -si --skippgpcheck --nocheck --noconfirm --noprogressbar --needed', 'aurhelper')
+		Cmd.log('$ cd; rm -rf /tmp/libc++', 'aurhelper')
+		errors += Pkg.aur_install('discord')
+
+		errors += Pkg.aur_install('visual-studio-code-bin')
+		write_status(errors)
+
+		if bat_present:
+			# TODO Use dotfiles instead?
+			file = '/etc/default/tlp'
+			Cmd.log('chmod 770 ' + file)
+			IO.replace_ln(file, 'TLP_DEFAULT_MODE=', 'TLP_DEFAULT_MODE=BAT')
+			IO.replace_ln(file, '#CPU_SCALING_GOVERNOR_ON_AC=', 'CPU_SCALING_GOVERNOR_ON_AC=performance')
+			IO.uncomment_ln(file, 'CPU_SCALING_GOVERNOR_ON_BAT=') # Enable ???
+			Cmd.log('chmod 644 ' + file)
+
+"""
+61  CPU_HWP_ON_AC=(balance_)performance
+62  CPU_HWP_ON_BAT=(balance_)power
+68  CPU_MIN_PERF_ON_AC=20
+69  CPU_MAX_PERF_ON_AC=100
+70  CPU_MIN_PERF_ON_BAT=0
+71  CPU_MAX_PERF_ON_BAT=40
+78  CPU_BOOST_ON_AC=1
+79  CPU_BOOST_ON_BAT=1
+105 DISK_DEVICES="sda (sdb)"
+207 USB_AUTOSUSPEND=1
+216 USB_BLACKLIST_BTUSB=1
+220 USB_BLACKLIST_PHONE=1
+224 USB_BLACKLIST_PRINTER=0
+237 USB_AUTOSUSPEND_DISABLE_ON_SHUTDOWN=1
+243 RESTORE_DEVICE_STATE_ON_STARTUP=1
+269 DEVICES_TO_DISABLE_ON_BAT_NOT_IN_USE="bluetooth wifi wwan"
+295 DEVICES_TO_DISABLE_ON_WIFI_CONNECT="wwan"
+296 DEVICES_TO_DISABLE_ON_WWAN_CONNECT="wifi"
+"""
 
 
 
 ###############################
 # "Constant" values
 ###############################
-
-# TODO Make localizable (add overrideable localized variables)
 
 status_colors = {
 	0: 1,
@@ -125,6 +186,8 @@ status_mgs = {
 	5: 'INFO'
 }
 
+apps_path = '/usr/share/applications'
+
 script_path, script_fn = os.path.split(os.path.abspath(sys.argv[0])) # Script filename  e.g. 'setup.py'
 script_path += ('/' + script_fn)            # Full script path e.g. '/root/setup.py'
 script_root = script_path.rsplit('/', 1)[0] # Directory path of script e.g. '/root'
@@ -133,24 +196,28 @@ blkid_cmd = "blkid | grep -v '^/dev/loop' | grep -v '^/dev/sr0'"
 
 # Vars updated on script load
 boot_mode = 'BIOS/CSM'    # 'BIOS/CSM' / 'UEFI'
-cpu_type = ''             # 'intel' / 'amd'
+cpu_identifier = ''       # CPU identifier e.g. 'intel_6-60-4'
+aur_cache = ''            # Path of cached AUR packages e.g. '/pkgcache/pkgcache/aur/intel_6-60-4'
 in_chroot = False         # Inside chroot?
 vm_env = ''               # Virtualized env: '','vbox','vmware','other'
 bat_present = False       # Any battery present?
 disc_tray_present = False # Any disc tray present?
 bt_present = False        # Any BT device present?
+camera_present = False    # Any camera device present?
 fdd_present = False       # Any floppy disk drive present?
 args = ''                 # All arguments in one string
 mbr_grub_dev = ''         # GRUB install device on MBR systems e.g. '/dev/sda'
-mounts = ''               # Current mounts e.g. '/efi:/dev/sda1,root:/dev/sda2'
 video_drv = ''            # e.g. 'nvidia','nvidia-340','noveau+mesa','amdgpu+mesa','intel+mesa','bumblebee' etc
-kernel_suffix = ''
-try:
-	kernel_suffix = ('-lts' if use_lts_kernel else '')
-except:
-	pass
-par_menu_visit_counter = 0
-mount_menu_visit_counter = 0
+kernel_suffix = ''        # e.g. '-lts' when using LTS kernel
+pkgcache_enabled = os.path.exists('/pkgcache')
+use_qt_apps = False       # Get Qt versions of apps
+
+# Other vars
+cflags = '-march=native -O2 -pipe -fstack-protector-strong -fno-plt'
+mounts = '' # Current mounts e.g. '/efi:/dev/sda1,root:/dev/sda2'
+grub_conf = '/etc/default/grub'
+outdated_pkgs = ''
+menu_visit_counter = 0
 
 
 
@@ -160,7 +227,7 @@ mount_menu_visit_counter = 0
 
 # Clear the entire screen buffer
 def clear_screen():
-	Cmd.exec('clear')
+	Cmd.exec('clear', '', False)
 
 # Printing text
 
@@ -196,12 +263,15 @@ def color_str(string, reset=True):
 
 	return string
 
-# Writes text to stdout
+# Writes text to stdout with optional coloring
 def write(text):
+	if '\\§' in text: text = text.replace('\\§', '§') # '\§' => '§'
+	elif '§' in text: text = color_str(text)
+
 	sys.stdout.write(text)
 	sys.stdout.flush()
 
-# Writes a line of text to stdout
+# Writes a line of text to stdout with optional coloring
 def write_ln(text='', new_line_count=1):
 	for _ in range(0, new_line_count):
 		text += '\n'
@@ -211,8 +281,8 @@ def write_ln(text='', new_line_count=1):
 def print_header(header):
 	ul = ('=' * len(header)) # e.g. '============='
 	clear_screen()
-	write_ln(color_str(f'§7{header}')) # e.g. 'A Nice Header'
-	write_ln(color_str(f'§7{ul}'), 2) 
+	write_ln(f'§7{header}') # e.g. 'A Nice Header'
+	write_ln(f'§7{ul}', 2) 
 
 # Status messages
 
@@ -221,42 +291,31 @@ def print_header(header):
 #      '>> [ WAIT ] Fetching latest data...'
 #      '>> [  OK  ] Started NetworkManager service'
 #      '>> [ FAIL ] ...'
-# TODO Dynamic messages (e.g. changes on success/fail etc)
-# TODO Progress reporting commands (e.g. 'Updating sources... 34%')
 def write_msg(msg, status=0, override_newline=-1):
 	if status > 0:
 		color = status_colors.get(status)
 		status_msg = status_mgs.get(status, 0)
-		write(color_str(f'§{color}>> [ {status_msg} ] ')) # e.g. '>> [ WAIT ] '
+		write(f'§{color}>> [ {status_msg} ] ') # e.g. '>> [ WAIT ] '
 	else:
-		write(color_str('§7>> ')) # '>> '
+		write('§7>> ') # '>> '
 
-	# TODO msg = color_str(msg) ?
-
-	# TODO Improve this
-	if override_newline == -1:
-		if status > 1:
-			write_ln(msg)
-		else:
-			write(msg)
-	elif override_newline == 1:
-		write_ln(msg)
-	else:
-		write(msg)
+	new_ln = True if override_newline == -1 and status > 1 else False
+	new_ln = True if override_newline == 1 else new_ln
+	write(msg + ('\n' if new_ln else ''))
 
 # Writes back to the current status message line to update the appearance depending on a command's return value
 # e.g. write_status(0, 0)
 #      '>> [ DONE ]'
 #      write_status(1, 0, 4)
 #      '>> [ WARN ]'
-def write_status(ret_val, expected_val=0, error_status=3):
+def write_status(ret_val=0, expected_val=0, error_status=3):
 	if ret_val == expected_val:
 		status_msg = status_mgs.get(2)
-		write_ln(color_str(f'\r§3>> [ {status_msg} ]'))
+		write_ln(f'\r§3>> [ {status_msg} ]')
 	else:
 		color = status_colors.get(error_status)
 		status_msg = status_mgs.get(error_status)
-		write_ln(color_str(f'\r§{color}>> [ {status_msg} ]'))
+		write_ln(f'\r§{color}>> [ {status_msg} ]')
 
 # Logging
 
@@ -285,7 +344,6 @@ class IO:
 	@staticmethod
 	def write(f_path, text, append=False):
 		try:
-			# TODO Fix append mode??
 			mode = 'a' if append else 'w'
 			with open(f_path, f'{mode}+') as f:
 				f.write(text)
@@ -295,17 +353,15 @@ class IO:
 
 	# Appends text to a file
 	# Returns: 0 = Success, 1 = Error
-	@staticmethod
-	def append(f_path, text):
-		return IO.write(f_path, text, True)
+	#@staticmethod
+	#def append(f_path, text):
+	#	return IO.write(f_path, text, True)
 
 	# Writes a line to a file
 	# Returns: 0 = Success, 1 = Error
 	@staticmethod
 	def write_ln(f_path, text = '', append=True):
 		return IO.write(f_path, text + '\n', append)
-
-	# TODO Write a function returning tuples about a found line (e.g. ln_num, ln_str, ...)
 
 	# Replace a line with another in a file
 	# Returns: 0 = Replaced, 1 = Line not found, 2 = Error
@@ -375,42 +431,43 @@ class IO:
 # Package management
 
 class Pkg:
-	# TODO Progress reporting messages
 	# Refresh local package database cache
 	# Quit script execution on error
 	@staticmethod
 	def refresh_dbs(force_refresh=False, quit_on_fail=True):
-		command = 'pacman -Sy'
-		command += 'y' if force_refresh else ''
-		ret_val = Cmd.log(command)
+		cmd = 'pacman -Sy'
+		cmd += 'y' if force_refresh else ''
+		ret_val = Cmd.log(cmd)
 		if ret_val != 0 and quit_on_fail:
 			log_path = 'mnt' if in_chroot else 'tmp'
-			write_ln(color_str(f'§2ERROR: §0Database refreshing failed. Check /{log_path}/setup.log for details'))
+			write_ln(f'§2ERROR: §0Database refreshing failed. Check /{log_path}/setup.log for details')
 			exit_code = 8 if force_refresh else 7
 			exit(exit_code) # 7 = Couldn't synchronize databases, 8 = Force-refresh failed
 		return ret_val
 
-	# TODO Progress reporting messages
 	# Install packages from the Arch repositories (core, extra, community)
+	# or optionally a local package with the absolute path defined
 	# Returns: pacman exit code
 	@staticmethod
 	def install(pkgs, only_needed=True):
 		pac_args = '--needed' if only_needed else ''
-		if in_chroot: pac_args += ' --cachedir /pkgcache/pkgcache' if os.path.exists('/pkgcache') else ''
+		#local = pkgs.startswith('/') or pkgs.startswith('https://')
+		local = ('/' in pkgs)
+		if pkgcache_enabled and in_chroot and not local:
+			pac_args += ' --cachedir /pkgcache/pkgcache'
 		if len(pac_args) > 0: pac_args = ' ' + pac_args.strip()
-		ret_val = Cmd.log(f'pacman -S --noconfirm --noprogressbar{pac_args} {pkgs}')
+		action = 'U' if local else 'S'
+		ret_val = Cmd.log(f'pacman -{action} --noconfirm --noprogressbar{pac_args} {pkgs}')
 		return ret_val
 
-	# TODO Progress reporting messages
 	# Remove installed packages on a system
 	# Returns: pacman exit code
 	@staticmethod
-	def remove(pkgs, also_deps=False):
+	def remove(pkgs, also_deps=False, log_cmd=True):
 		pac_args = '-Rn' + ('sc' if also_deps else '') + ' --noconfirm --noprogressbar'
-		ret_val = Cmd.log(f'pacman {pac_args} {pkgs}')
+		ret_val = Cmd.log(f'pacman {pac_args} {pkgs}', '', log_cmd)
 		return ret_val
 
-	# TODO Progress reporting messages
 	# Install packages from the Arch User Repository (AUR)
 	# Returns: pacman exit code
 	@staticmethod
@@ -418,17 +475,33 @@ class Pkg:
 		if in_chroot:
 			if enable_aur:
 				yay_args = '--needed' if only_needed else ''
-				# TODO Add caching back once issues are resolved
-				#yay_args += ' --builddir /pkgcache/pkgcache/aur' if os.path.exists('/pkgcache') else ''
 				if len(yay_args) > 0: yay_args = ' ' + yay_args.strip()
-				ret_val = Cmd.log(f'$ yay -Sq --noconfirm{yay_args} {pkgs}', 'aurhelper')
-				return ret_val
+				errors = 0
+
+				pkgs = pkgs.strip() # To mitigate user error
+				if pkgcache_enabled:
+					for pkg in pkgs.split(' '):
+						pkg = pkg.strip() # To mitigate user error
+						# TODO Check version differently for '-git' packages e.g. 'pulseaudio-modules-bt-git' report old pkg versions on yay query
+						ver = Cmd.output(f'$ yay -Si {pkg} | grep Version', 'aurhelper').split(':', 1)[1].strip() # e.g. '3.3.0-1'
+						latest_pkg = ''
+						try: latest_pkg = str(Cmd.output(f'ls {aur_cache}/ | grep {pkg} | grep {ver}')).split('\n')[0].strip() # e.g. 'polybar-3.3.0-1-x86_64.pkg.tar.xz'
+						except: pass
+						if len(latest_pkg) > 0: # Up-to-date cached version found => install it instead
+							errors += Pkg.install(f'{aur_cache}/{latest_pkg}', only_needed)
+						else: # Cached version not found => fetch from the AUR
+							ret_val = Cmd.log(f'$ yay -Sq --noconfirm{yay_args} {pkgs}', 'aurhelper')
+							if ret_val == 0: # Installed => try caching package
+								Cmd.log(f'cp /home/aurhelper/.cache/yay/{pkg}/*.pkg.tar.xz {aur_cache}/')
+							errors += ret_val
+				else:
+					errors = Cmd.log(f'$ yay -Sq --noconfirm{yay_args} {pkgs}', 'aurhelper')
+				return errors
 			else:
-				log(f'[setup.py:Pkg.aur_install({pkgs})] WARN: Ignoring installation, since the AUR support is not disabled.')
-				return 1
+				log(f"[setup.py:Pkg.aur_install('{pkgs}')] WARN: Ignoring installation since AUR support is not present.")
 		else:
-			log(f'[setup.py:Pkg.aur_install({pkgs})] WARN: Ignoring installation, since not in chroot.')
-			return 1
+			log(f"[setup.py:Pkg.aur_install('{pkgs}')] WARN: Ignoring installation since not in chroot.")
+		return 1
 
 # Command execution
 
@@ -437,39 +510,43 @@ class Cmd:
 	# io_stream_type: 0 = none, 1 = stdout, 2 = logged, 3 = all_supressed
 	# Returns: command exit code / output when io_stream_type=2
 	@staticmethod
-	def exec(command, exec_user='', io_stream_type=0):
-		user_exec = command.startswith('$ ')
-		exec_cmd = command
+	def exec(cmd, exec_user='', log_cmd=True, io_stream_type=0):
+		user_exec = cmd.startswith('$ ')
+		exec_cmd = cmd
 
 		if user_exec:
 			if exec_user == '':
 				# TODO Use first NON-RESTRICTED user instead if not defined?
 				exec_user = users.split(',')[0]
-			command = command[2:] # Remove '$ ' from user_exec commands
+			cmd = cmd[2:] # Remove '$ ' from user_exec commands
 			if len(exec_user) > 0:
-				exec_cmd = f"sudo -i -u {exec_user} -H bash -c '{command}'"
+				exec_cmd = f"sudo -i -u {exec_user} -H bash -c '{cmd}'"
 			else:
-				log(f'[setup.py:Cmd.exec({str(io_stream_type)})] WARN: Ignoring "{command}" execution, since no user was defined.')
+				log(f"[setup.py:Cmd.exec({str(io_stream_type)})] WARN: Ignoring '{cmd}' execution, since no user was defined.")
 				return 1
 
 		use_stdout = (io_stream_type == 1)
 		logged = (io_stream_type == 2)
 		suppress = (io_stream_type == 3)
 
+		# TODO Still log everything if launched with '-D' flag for debugging purposes
+		if log_cmd and io_stream_type % 2 == 0: # Log executed command line ()
+			start = '# ' + (f'({exec_user}) $ ' if user_exec else '')
+			log(f'\n{start}{cmd}') # e.g. '# pacman -Syu'
+
 		end = ''
 		if suppress or logged:
 			path = '' if in_chroot else '/tmp'
 			log_path = f'{path}/setup.log' # e.g. '/tmp/setup.log' or '/setup.log' in chroot
-			end = ' ' + f'&>>{log_path}' if logged else '&>/dev/null'
-			if logged:
-				start = (f'# ({exec_user}) $' if user_exec else '#') + ' '
-				log(f'\n{start}{command}') # e.g. '# pacman -Syu'
-		if use_stdout:
-			res = subprocess.run(exec_cmd + end, shell=True, encoding='utf-8', capture_output=use_stdout)
-		else:
-			res = subprocess.run(exec_cmd + end, shell=True)
+			#end = ' &>>' + (log_path if (logged and log_cmd) else '/dev/null')
+			end = ' ' + f'&>>{log_path}' if logged and log_cmd else '&>/dev/null'
 
-		if logged and res.returncode != 0:
+		cmd = exec_cmd + end
+		# TODO Log cmd line when debugging
+		if use_stdout: res = subprocess.run(cmd, shell=True, encoding='utf-8', capture_output=use_stdout)
+		else: res = subprocess.run(cmd, shell=True)
+
+		if log_cmd and io_stream_type % 2 == 0 and res.returncode != 0:
 			log(f'\n# Command non-zero exit code: {res.returncode}')
 
 		returns = res.stdout if use_stdout else res.returncode
@@ -479,20 +556,27 @@ class Cmd:
 	# New lines are seperated with a '\n'
 	# Returns: command exit code
 	@staticmethod
-	def output(command, exec_user=''):
-		return Cmd.exec(command, exec_user, 1)
+	def output(cmd, exec_user='', log_cmd=True):
+		return Cmd.exec(cmd, exec_user, log_cmd, 1)
 
 	# Run a command on the shell while logging all it's output
 	# Returns: command exit code
 	@staticmethod
-	def log(command, exec_user=''):
-		return Cmd.exec(command, exec_user, 2)
+	def log(cmd, exec_user='', log_cmd=True):
+		return Cmd.exec(cmd, exec_user, log_cmd, 2)
 
 	# Run a command on the shell while supressing all it's output
 	# Returns: command exit code
 	@staticmethod
-	def suppress(command, exec_user=''):
-		return Cmd.exec(command, exec_user, 3)
+	def suppress(cmd, exec_user=''):
+		return Cmd.exec(cmd, exec_user, False, 3)
+
+	# Check whether a command e.g. 'nc' is available on a system
+	# Returns: boolean
+	@staticmethod
+	def exists(cmd):
+		ret_val = Cmd.suppress(f'type {cmd}') # command -v
+		return (ret_val == 0)
 
 # Checking user details
 
@@ -549,32 +633,57 @@ class User:
 # Check if running in Arch Linux installer env & quit if not
 # Additionally update details about the device
 def check_env():
-	global de, users, boot_mode, in_chroot
+	global de, users, boot_mode, in_chroot, kernel_suffix, cpu_identifier, aur_cache, use_qt_apps
 	os_compat_msg = 'Please only run this script on the Arch Linux installer environment.\n\nhttps://www.archlinux.org/download/'
-	file_msg = "It seems that you are missing a '§f' module.\nHere's one way to fix it:\n\n   # §c\n"
+	file_msg = "It seems that you are missing a '§f' module.\n"
 	if os.name == 'posix':
+		# TODO Improve a bit
+		#ret_val = Cmd.exec('cat /etc/hostname &>/dev/null')
 		ret_val = Cmd.suppress('cat /etc/hostname')
 		if ret_val == 0:
 			host = IO.read_ln('/etc/hostname')
 			if host != 'archiso':
 				print(os_compat_msg)
 				exit(3) # 3 = Not running in ArchISO environment
-
-			# config.py
-			try:
-				base_pkgs
-			except NameError:
-				# TODO Give an option to download the script instead of only giving instructions
-				print(file_msg.replace('§f', 'config.py').replace('§c', 'curl https://git.io/fhbgV -Lso config.py'))
-				exit(4) # 4 = config.py not loaded
 		#elif host == hostname:
 			# TODO Add post-install script parts => verify here
 		else: # Read failed => Assume chroot environment
+			# TODO Use a better chroot detection mechanism
 			in_chroot = True
 
+		if not in_chroot: in_chroot = os.path.isfile('/chroot')
+
+		if in_chroot: Cmd.suppress('rm -f /chroot')
+
+		# config.py
+		try:
+			kernel_suffix = ('-lts' if use_lts_kernel else '')
+			# TODO Load 
+		except NameError:
+			print(file_msg.replace('§f', 'config.py'))
+			write_msg(f'Would you like to try & §7fetch §0the file from GitHub? (§3Y§0/§2n§0)? §7>> ')
+			ans = input().upper().replace('YES', 'Y')
+			if len(ans) == 0 or ans == 'Y':
+				write_ln()
+				write_msg('Downloading latest revision of config.py from https://git.io/fhbgV...', 1)
+				ret_val = Cmd.suppress(f'curl https://git.io/fhbgV -Lso {script_root}/config.py')
+				write_status(ret_val)
+
+			print()
+			exit(4) # 4 = config.py not loaded
+
+		# CPU type needed for ucode
+		cpu_type = 'intel' if Cmd.suppress('cat /proc/cpuinfo | grep -i intel') == 0 else 'amd'
+		cpu_family = Cmd.output("cat /proc/cpuinfo | grep -i family | uniq").split(':', 1)[1].strip() # e.g. '6'
+		cpu_model = Cmd.output("cat /proc/cpuinfo | grep -i model | grep -vi '^model name' | uniq").split(':', 1)[1].strip() # e.g. '60'
+		cpu_cores = Cmd.output("cat /proc/cpuinfo | grep -i processor | wc -l").strip() # e.g. '4'
+		cpu_identifier = f'{cpu_type}_{cpu_family}-{cpu_model}-{cpu_cores}' # e.g. 'intel_6-60-4'
+		aur_cache = f'/pkgcache/pkgcache/aur' + (f'/{cpu_identifier}' if optimize_aur_packages and optimize_cached_pkgs else '')
+
 		de = de.lower().replace('none', '')
-		# TODO Add a regex to disregard everything except accepted chars
-		users = users.lower().strip().replace(' ', '') # '-'
+		use_qt_apps = (de == 'kde' or de == 'lxqt')
+
+		users = users.replace(' ', '').lower().strip()
 
 		# Update bootmode to EFI if required
 		ret_val = Cmd.suppress('ls /sys/firmware/efi/efivars')
@@ -584,11 +693,15 @@ def check_env():
 		input()
 		exit(2) # 2 = Non-POSIX systems are incompatible
 
+# TODO Load phrases.txt for preferred language & transform all phrases in 
+def load_localization():
+	pass
+
 # Check if running as root
 def check_privs():
-	user = Cmd.output("whoami").rstrip('\n')
+	user = Cmd.output('whoami').rstrip('\n')
 	if user != 'root':
-		write_ln(color_str('§2ERROR: §0Please run this file as root to continue.'))
+		write_ln('§2ERROR: §0Please run this script as root to continue.')
 		exit(5) # 5 = Privilege requirements unmet
 
 
@@ -599,25 +712,43 @@ def check_privs():
 
 # Use custom installer color definitions
 def load_colors():
-	# TODO 16 colors
-	Cmd.exec("echo -en '\\033]P00C0C0C'") # Black
-	Cmd.exec("echo -en '\\033]P1AF1923'") # Red
-	Cmd.exec("echo -en '\\033]P269A62A'") # Green
-	Cmd.exec("echo -en '\\033]P3E68523'") # Yellow
-	Cmd.exec("echo -en '\\033]P42935B1'") # Blue
-	Cmd.exec("echo -en '\\033]P57C1FA1'") # Magenta
-	Cmd.exec("echo -en '\\033]P62397F5'") # Cyan
-	Cmd.exec("echo -en '\\033]P79E9E9E'") # White
-	clear_screen() # Clear screen to avoid coloring artifacts
+	Cmd.exec("echo -en '\\033]P0101010'", '', False) # Black
+	Cmd.exec("echo -en '\\033]P1AF1923'", '', False) # Dark Red
+	Cmd.exec("echo -en '\\033]P269A62A'", '', False) # Dark Green
+	Cmd.exec("echo -en '\\033]P3E68523'", '', False) # Dark Yellow
+	Cmd.exec("echo -en '\\033]P42935B1'", '', False) # Dark Blue
+	Cmd.exec("echo -en '\\033]P57C1FA1'", '', False) # Dark Magenta
+	Cmd.exec("echo -en '\\033]P62397F5'", '', False) # Dark Cyan
+	Cmd.exec("echo -en '\\033]P7A4A4A4'", '', False) # Light Gray
+	Cmd.exec("echo -en '\\033]P8303030'", '', False) # Dark Gray
+	Cmd.exec("echo -en '\\033]P9FF0000'", '', False) # Red
+	Cmd.exec("echo -en '\\033]PA4CFF00'", '', False) # Green
+	Cmd.exec("echo -en '\\033]PBFFD800'", '', False) # Yellow
+	Cmd.exec("echo -en '\\033]PC0026FF'", '', False) # Blue
+	Cmd.exec("echo -en '\\033]PDFF00FF'", '', False) # Magenta
+	Cmd.exec("echo -en '\\033]PE00FFFF'", '', False) # Cyan
+	Cmd.exec("echo -en '\\033]PFF5F5F5'", '', False) # White
+	clear_screen() # For avoiding coloring artifacts
 
 # Check network connectivity with ping
 def check_connectivity():
 	write_msg('Checking network connectivity...', 1)
-	ret_val = Cmd.log('curl 1.1.1.1')
-	write_status(ret_val)
+	ret_val = Cmd.log('curl -s 1.1.1.1')
 	if ret_val != 0:
-		write_ln(color_str("§2ERROR: §0No network connectivity. Check your connection and try again."))
-		exit(6) # 6 = Network connectivity error
+		write_status(1)
+		write_ln("\n§2ERROR: §0No network connectivity. Check your connection and try again.", 2)
+		exit(6) # 6 = Network connectivity issue
+	elif enable_aur: # Test connection to AUR
+		ret_val += Cmd.log('ping -c 1 aur.archlinux.org')
+		write_status(ret_val, 0, 4)
+		if ret_val != 0:
+			write_ln("\n§4WARN: §0Possibly unreliable network connection detected: AUR support could fail to be enabled.")
+			write_msg(f'Would you like to continue §2without §0making any changes? (§3y§0/§2N§0)? §7>> ')
+			ans = input().upper().replace('YES', 'Y')
+			write_ln()
+			if ans != 'Y':
+				exit(6) # 6 = Network connectivity issue
+	else: write_status()
 
 # Load console font using 'setfont'
 def load_font():
@@ -632,7 +763,7 @@ def load_font():
 	ret_val = Cmd.log('setfont ' + font)
 	write_status(ret_val)
 	if ret_val != 0:
-		write_ln(color_str("§2ERROR: §0Font loading failed. Most likely cause: the specified font was not found."))
+		write_ln("§2ERROR: §0Font loading failed. Most likely cause: the specified font was not found.")
 		exit(9) # 9 = Font couldn't be loaded!
 
 # Load kb map using 'loadkeys'
@@ -641,7 +772,7 @@ def load_kbmap():
 	ret_val = Cmd.log('loadkeys ' + keymap)
 	write_status(ret_val)
 	if ret_val != 0:
-		write_ln(color_str("§2ERROR: §0Keymap loading failed. Most likely cause: the specified keymap was not found."))
+		write_ln("§2ERROR: §0Keymap loading failed. Most likely cause: the specified keymap was not found.")
 		exit(10) # 10 = Keymap couldn't be loaded!
 
 # NTP time synchronization
@@ -653,43 +784,40 @@ def ntp_setup():
 # Disk partitioning
 
 def partition(tool_to_use=''):
-	Cmd.exec(f"echo && {lsblk_cmd} && echo")
+	Cmd.exec(f"echo && {lsblk_cmd} && echo", '', False)
 	tool_defined = len(tool_to_use) > 0
 	if tool_defined:
 		write_msg('Device to partition (e.g. ')
 	else:
-		write_msg(color_str('Partitioning command line (e.g. §4fdisk §7/dev/'))
-	write(color_str("§7sda§0) §7>> "))
+		write_msg('Partitioning command line (e.g. §4fdisk §7/dev/')
+	write("§7sda§0) §7>> ")
 	in_cmd = ''
 	in_cmd = input().strip().lower()
 	if len(in_cmd) > 0:
-		if tool_defined:
-			Cmd.exec(f"{tool_to_use} /dev/{in_cmd}")
-		else:
-			Cmd.exec(in_cmd)
+		if tool_defined: Cmd.exec(f'{tool_to_use} /dev/{in_cmd}')
+		else: Cmd.exec(in_cmd)
 
 def sel_par_tool(hide_guide=False):
 	if not hide_guide:
 		# TODO Improve this
 		# Enter 'G' to partition using cgdisk (recommended for UEFI)
 		# Enter 'F' to partition using cfdisk (recommended for BIOS/CSM)
-		write_ln(color_str("   Enter '§3%s§0' to partition using §3%s §0(recommended for %s)" % ("G" if boot_mode == "UEFI" else "F", "cgdisk" if boot_mode == "UEFI" else "cfdisk", boot_mode)))
-		write_ln(color_str("   Enter '§4%s§0' to partition using §4%s §0(recommended for %s)" % ("F" if boot_mode == "UEFI" else "G", "cfdisk" if boot_mode == "UEFI" else "cgdisk", "BIOS/CSM" if boot_mode == "UEFI" else "UEFI")))
-		# TODO Add partition listing options e.g. lsblk, blkid, fdisk -l
-		write_ln(color_str("   Enter '§7O§0' to partition using §7something else"), 2)
+		write_ln("   Enter '§3%s§0' to partition using §3%s §0(recommended for %s)" % ("G" if boot_mode == "UEFI" else "F", "cgdisk" if boot_mode == "UEFI" else "cfdisk", boot_mode))
+		write_ln("   Enter '§4%s§0' to partition using §4%s §0(recommended for %s)" % ("F" if boot_mode == "UEFI" else "G", "cfdisk" if boot_mode == "UEFI" else "cgdisk", "BIOS/CSM" if boot_mode == "UEFI" else "UEFI"))
+		write_ln("   Enter '§7O§0' to partition using §7something else", 2)
+
+		write_ln("   Enter '§3L§0' to view partitions using §3lsblk")
+		write_ln("   Enter '§2I§0' to view partitions using §2blkid", 2)
 
 	# '>> Selection (C/F/G/O) >> '
 	write_msg('Selection (')
 
 	# TODO Improve this
-	if boot_mode == 'UEFI':
-		write(color_str('§3G§0/§4F'))
-	else:
-		write(color_str('§3F§0/§4G'))
+	if boot_mode == 'UEFI': write('§3G§0/§4F')
+	else: write('§3F§0/§4G')
 
-	write(color_str('/§7O§0) §7>> '))
+	write('/§7O§0/§3L§0/§2I§0) §7>> ')
 
-	# TODO Fix output showing lsblk when empty (running partition() somehow)?
 	sel = ''
 	sel = input().strip().upper()
 	if len(sel) > 0:
@@ -699,19 +827,23 @@ def sel_par_tool(hide_guide=False):
 			partition('cfdisk')
 		elif sel == 'O':
 			partition()
+		elif sel == 'L' or sel == 'I':
+			cmd = lsblk_cmd if sel == 'L' else blkid_cmd
+			write_ln()
+			Cmd.exec(cmd, '', False)
+			write('\nPress ENTER to continue...')
+			input()
 		else:
 			sel_par_tool(True)
 		partitioning_menu()
 
-	# TODO Don't allow to continue without having atleast 1 partition on the disk (check lsblk output lines count)
-
 def partitioning_menu():
-	global par_menu_visit_counter
+	global menu_visit_counter
 	print_header('Disk Partitioning')
-	middle = ' anymore' if par_menu_visit_counter > 0 else ''
+	middle = ' anymore' if menu_visit_counter > 0 else ''
 	# TODO Make user type 'done' instead to continue?
-	write_ln(color_str(f"   §3Tip: §0If you don't need to partition{middle}, just press ENTER"), 2)
-	par_menu_visit_counter += 1
+	write_ln(f"   §3Tip: §0If you don't need to partition{middle}, just press ENTER", 2)
+	menu_visit_counter += 1
 	sel_par_tool()
 
 # Partition mounting & formatting
@@ -719,12 +851,14 @@ def partitioning_menu():
 # Mount a partition
 # e.g. 'mount_par('/dev/sda1', '/')'
 def mount_par(blk_dev, mount_point='/', opts=''):
-	Cmd.log(f'mkdir -p /mnt{mount_point}')
+	mount_point = f'/mnt{mount_point}' # e.g. '/' -> '/mnt/'
+	Cmd.suppress(f'umount -R {mount_point}') # try unmounting existing par
+	Cmd.log(f'mkdir -p {mount_point}')
 	opts = ' -o ' + opts if len(opts) > 0 else ''
-	return Cmd.log(f'mount{opts} {blk_dev} /mnt{mount_point}')
+	return Cmd.log(f'mount{opts} {blk_dev} {mount_point}')
 
 def par_opt_handler(opt):
-	global mbr_grub_dev
+	global mbr_grub_dev, pkgcache_enabled
 
 	# Option validity checks
 	# TODO Fully disallow mounted selections to be chosen in mounting menu! (e.g. /,/efi,swap etc)
@@ -735,11 +869,11 @@ def par_opt_handler(opt):
 	if opt != 'B' and opt != 'R' and opt != 'E' and opt != 'H' and opt != 'S' and opt != 'C' and opt != 'O':
 		list_used_pars(True)
 
-	lsblk = Cmd.output(f"{lsblk_cmd} | grep -v '/' | grep -i -v 'swap'")
+	lsblk = Cmd.output(f"{lsblk_cmd} | grep -v '/mnt' | grep -i -v 'swap'")
 
-	# TODO Improve check
 	if lsblk.count('\n') <= 2:
 		write_ln()
+		# TODO Show question to re-enter partitioning menu!
 		write_msg('Mounting cancelled since there are no devices to mount.', 4)
 		write('\nPress ENTER to continue...')
 		input()
@@ -748,31 +882,24 @@ def par_opt_handler(opt):
 	write_ln(f"\n{lsblk}")
 
 	purpose = opt.replace('B', '/boot').replace('R', '/').replace('E', '/efi').replace('H', '/home').replace('S', 'swap').replace('O', 'other purpose').replace('C', 'package cache')
-	write_msg(color_str(f'Which partition would you like to use for §3{purpose} §0(e.g. '))
+	write_msg(f'Which partition would you like to use for §3{purpose} §0(e.g. ')
 	if opt == 'O':
-		write(color_str('§7/dev/'))
-	write(color_str('§7sda1§0)? §7>> '))
+		write('§7/dev/')
+	write('§7sda1§0)? §7>> ')
 	par = ''
-	par = input().strip().lower() # sda1
-	# TODO Check if input device is ACTUALLY valid
-	if len(par) < 3: # 4?
-		mounting_menu()
-	if '/' not in par:
-		par = '/dev/' + par # Make proper form, e.g. '/dev/sda1'
-
-	# TODO Improve formatting in this function
+	par = input().strip().lower() # e.g. 'sda1'
+	if len(par) < 4: mounting_menu()
+	if '/' not in par: par = '/dev/' + par # Make proper form, e.g. '/dev/sda1'
+	ret_val = Cmd.suppress('find ' + par)
+	if ret_val != 0: mounting_menu() # TODO msg user ...
 
 	# e.g. 'Would you like to format /dev/sda1 for / using ext4 (y/N)? >> '
 	#      'Would you like to format /dev/sda2 for swap usage (y/N)? >> '
 	#      'Would you like to use /dev/sda3 for other purpose (y/N)? >> '
-	#if format_par == -1:
-	write_msg(color_str(f'Would you like to §2format §7{par} §0(§2y§0/§3N§0)? §7>> '))
+	write_ln()
+	write_msg(f'Would you like to §2format §7{par} §0(§2y§0/§3N§0)? §7>> ')
 	ans = ''
 	ans = input().upper().replace('YES', 'Y')
-	#elif format_par == 1:
-	#	ans = 'Y'
-	#else:
-	#	ans = 'n'
 
 	# TODO Add RAID support etc.
 
@@ -795,32 +922,31 @@ def par_opt_handler(opt):
 		elif opt == 'S': # swap
 			fs_type = 'swap'
 		else: # other
-			write_ln(color_str('§7>> §0All available supported §3filesystem types§0:'), 2)
+			write_ln('\n§7>> §0All available supported §3filesystem types§0:', 2)
 			# TODO Add other as fs type & custom format commands etc
 			# [ 'Btrfs', ...
 			supported_fs_types = [ 'ext4', 'exFAT', 'FAT32', 'NTFS', 'ReiserFS', 'swap', 'XFS' ]
 			for fs_type in supported_fs_types:
-				write_ln(color_str(f'   §3{fs_type}'))
+				write_ln(f'   §3{fs_type}')
 			write_ln()
 
 			# '{2}this is in red {0}back to default'
-			write(color_str(f'§7>> §0Which §3filesystem type §0would you like to format §7{par} §0with (e.g. §3ext4§0)? §7>> '))
+			write(f'§7>> §0Which §3filesystem type §0would you like to format §7{par} §0with (e.g. §3ext4§0)? §7>> ')
 			fs_type = input().strip().lower() # e.g. 'ext4'
 			if len(fs_type) < 3 or fs_type not in [x.lower() for x in supported_fs_types]:
 				mounting_menu()
 
 			fs_type = fs_type.replace('fat32', 'fat')
 
-		# TODO Use '-L Arch Linux' on ext4 / par etc.
 		format_cmd = (f'mkfs.{fs_type}') if fs_type != 'swap' else 'mkswap' # e.g. 'mkfs.ext4', 'mkswap'
 		if fs_type in format_args:
 			format_cmd += ' ' + format_args.get(fs_type)
 
 		write_ln()
+		# TODO Use proper stylized version of 'fs_type' e.g. get index & use from supported_fs_types[]
 		write_msg(f'Formatting {par} using {fs_type}...', 1)
-		# TODO Add custom labels for / 'Arch Linux' etc
-		format_cmd += ' -n ESP' if opt == 'E' else ''
-		ret_val = Cmd.log(f"{format_cmd} {par}") # e.g. 'mkfs.ext4 /dev/sda1'
+		#format_cmd += ' -n ESP' if opt == 'E' else ''
+		ret_val = Cmd.log(f'{format_cmd} {par}') # e.g. 'mkfs.ext4 /dev/sda1'
 		write_status(ret_val)
 		if ret_val != 0:
 			pause = True
@@ -834,56 +960,58 @@ def par_opt_handler(opt):
 			#if ans != 'Y': write_ln()
 			if opt == 'O':
 				write_ln()
-				write_msg(color_str(f'Where would you like to mount §7{par} §0in the new system (e.g. §3/var§0)? §7>> '))
+				write_msg(f'Where would you like to mount §7{par} §0in the new system (e.g. §3/var§0)? §7>> ')
 				mp = ''
 				mp = input().strip().lower() # e.g. '/var'
 				write_ln()
 			elif opt == 'R': mp = '/'
 			elif opt == 'B': mp = '/boot'
 			elif opt == 'H': mp = '/home'
-			elif opt == 'C':
-				mp = '/pkgcache'
-			else: mp = '/efi'
+			elif opt == 'C': mp = '/pkgcache'
+			elif opt == 'E': mp = '/efi'
 
 			# TODO Prevent mounting to / when using NTFS etc.
 			if len(mp) > 0 and mp.startswith('/'): # Assume proper path
 				# TODO Don't add new line if not formatted
 				write_ln()
-				write_msg(color_str('Other §4optional §0mount options (e.g. §7noatime,nofail§0) >> '))
+				write_msg('Other §4optional §0mount options (e.g. §7noatime,nofail§0) >> ')
 				opts = ''
 				opts = input().strip().replace(' ', '') # e.g. 'noatime,nofail'
+				#opts = 'defaults' if len(opts) == 0 else f'defaults,{opts}'
 				write_ln()
 				write_msg(f'Mounting {par} to {mp}...', 1)
 				ret_val = mount_par(par, mp, opts) # e.g. 'mount /dev/sda1 /mnt/'
 				write_status(ret_val)
 				if ret_val != 0: pause = True
 				elif boot_mode == 'BIOS/CSM' and ((opt == 'R' and mbr_grub_dev == '') or opt == 'B'): # Update MBR GRUB device
-					if par[-1:].isdigit():
-						par = par[:-1]
+					if par[-1:].isdigit(): par = par[:-1] # e.g. '/dev/sda1' => '/dev/sda'
 					mbr_grub_dev = par # e.g. '/dev/sda'
 				elif mp == '/pkgcache':
 					# TODO Update to support Btrfs
-					write_msg('Checking partition filesystem compatability for caching...', 1)
-					errors = Cmd.log('mkdir -p /mnt/pkgcache/pkgcache') # /aur
+					#write_ln()
+					write_msg('Checking partition filesystem compatibility for caching...', 1)
+					errors = Cmd.log(f'mkdir -p /mnt/pkgcache/pkgcache/aur/' + (cpu_identifier if optimize_cached_pkgs else ''))
 					errors += Cmd.log('touch /mnt/pkgcache/pkgcache/test-1:1.2.3.4-x86-64.pkg.tar.xz.part')
 					write_status(errors)
-					if errors == 0:
+					pkgcache_enabled = (errors == 0)
+					if pkgcache_enabled:
 						Cmd.log('rm -f /mnt/pkgcache/pkgcache/test-1:1.2.3.4-x86-64.pkg.tar.xz.part')
 						Cmd.log('cp /etc/pacman.conf /etc/pacman.conf.bak')
-						write_msg('Enabling package cache on the partition...', 1)
-						ret_val = IO.replace_ln('/etc/pacman.conf', '#CacheDir', 'CacheDir = /mnt/pkgcache/pkgcache')
-						write_status(ret_val)
-
-					if ret_val != 0:
+						IO.replace_ln('/etc/pacman.conf', '#CacheDir', 'CacheDir = /mnt/pkgcache/pkgcache') # pkgcache on live env
+						write_msg('Enabling package cache on the partition...', 2)
+					else:
 						pause = True
 						Cmd.log('mv /etc/pacman.conf.bak /etc/pacman.conf')
-						Cmd.log('rm -rf /mnt/pkgcache')
-						Cmd.log('umount /mnt/pkgcache')
+						IO.replace_ln('/etc/pacman.conf', 'CacheDir', '#CacheDir')
+						Cmd.log('cd && umount /mnt/pkgcache && rm -rf /mnt/pkgcache')
 			else:
+				write_ln()
 				write_msg('Mounting cancelled due to an invalid mountpoint.', 4)
 				pause = True
 		else:
+			write_ln()
 			write_msg(f'Enabling swap on {par}...', 1)
+			Cmd.suppress('swapoff ' + par) # try disabling existing swap
 			ret_val = Cmd.log('swapon ' + par) # e.g. 'swapon /dev/sda1'
 			write_status(ret_val)
 			if ret_val != 0:
@@ -920,11 +1048,11 @@ def write_par_mount(key='E', mount='/efi', device='/dev/sda1', condition=False, 
 				log(f"[setup.py:write_par_mount()] WARN: Mountpoint not found for mount '{mount}' on device '{device}', showing /dev/null instead...")
 				log(f"Mounts: '{mounts}'")
 		action = 'mounted as' if key != 'S' else 'enabled on'
-		write(color_str(f' §3({action} §7{device}§3)'))
+		write(f' §3({action} §7{device}§3)')
 	write_ln()
 
 def list_used_pars(hide_guide=False):
-	global mounts, mount_menu_visit_counter
+	global mounts, menu_visit_counter
 	mounts = ''
 	other_mounts = ''
 
@@ -932,7 +1060,6 @@ def list_used_pars(hide_guide=False):
 	# WARN Mounting anything to a mount point ending in 'root' is forbidden
 	tmp_mounts = Cmd.output("lsblk -n -o NAME,MOUNTPOINT | grep -v '^loop' | grep -v '^sr0'") # | grep /
 	for line in tmp_mounts.split('\n'):
-		# TODO Only do if not starting with an alphabet char
 		dev = line.split(' ')[0][2:]          # e.g. 'sda2'
 		if '[SWAP]' in line:                  # Swap enabled
 			mounts += f'swap:/dev/{dev},'       # e.g. 'swap:/dev/sda2,'
@@ -948,33 +1075,36 @@ def list_used_pars(hide_guide=False):
 					other_mounts += entry
 
 	if 'root:' not in mounts:
-		mount_menu_visit_counter = 0
+		menu_visit_counter = 0
 
 	#write_msg('Mounts: ' + mounts + '\n')
 	#write_msg('Other:  ' + other_mounts + '\n\n')
 
 	if not hide_guide:
-		write_ln(color_str('   The following partitions are §2mandatory§0:'), 2)
+		write_ln('   The following partitions are §2mandatory§0:', 2)
 		write_par_mount('R', '/', '', ('root:' in mounts))
-		if boot_mode == 'UEFI':
-			write_par_mount('E', '/efi', '', ('/efi:' in mounts))
+		if 'root:' in mounts:
+			if boot_mode == 'UEFI':
+				write_ln()
+				write_par_mount('E', '/efi', '', ('/efi:' in mounts))
 
-		write_ln('\n' + color_str('   §4Optional §0partitions include:'), 2)
-		write_par_mount('B', '/boot', '', ('/boot:' in mounts))
-		write_par_mount('H', '/home', '', ('/home:' in mounts))
-		write_par_mount('C', '/pkgcache', '', ('/pkgcache:' in mounts))
-		write_par_mount('S', 'swap', '', ('swap:' in mounts))
-		write_ln('      O   other')
-		# TODO Improve output formatting
-		if 'root:' in mounts and len(other_mounts) > 0: # Other mounts found => List them
-			split_mounts = other_mounts.split(',') # e.g. '/root:/dev/sda2', '/efi:/dev/sda1'
-			for entry in split_mounts:             # e.g. '/efi:/dev/sda1'
-				if len(entry) > 0:
-					split_entry = entry.split(':')     # e.g. '/efi', '/dev/sda1'
-					try:
-						write_par_mount('', split_entry[0], split_entry[1], True, 7, 3)
-					except:
-						log(f"[setup.py:list_used_pars()] WARN: Couldn't display other mount entry '{entry}'")
+		if 'root:' in mounts:
+			write_ln('\n   §4Optional §0partitions include:', 2)
+			write_par_mount('B', '/boot', '', ('/boot:' in mounts))
+			write_par_mount('H', '/home', '', ('/home:' in mounts))
+			write_par_mount('C', '/pkgcache', '', ('/pkgcache:' in mounts))
+			write_par_mount('S', 'swap', '', ('swap:' in mounts))
+			write_ln('      O   other')
+			# TODO Improve output formatting
+			if 'root:' in mounts and len(other_mounts) > 0: # Other mounts found => List them
+				split_mounts = other_mounts.split(',') # e.g. '/root:/dev/sda2', '/efi:/dev/sda1'
+				for entry in split_mounts:             # e.g. '/efi:/dev/sda1'
+					if len(entry) > 0:
+						split_entry = entry.split(':')     # e.g. '/efi', '/dev/sda1'
+						try:
+							write_par_mount('', split_entry[0], split_entry[1], True, 9, 3)
+						except:
+							log(f"[setup.py:list_used_pars()] WARN: Couldn't display other mount entry '{entry}'")
 
 		#start = '\n' if len(other_mounts) != 0 else ''
 		# %s % start
@@ -987,17 +1117,19 @@ def list_used_pars(hide_guide=False):
 	write_msg('Selection (')
 	if 'root:' not in mounts:
 		write('R/')
-	if boot_mode == 'UEFI' and '/efi:' not in mounts:
-		write('E/')
-	if '/boot:' not in mounts:
-		write('B/')
-	if '/home:' not in mounts:
-		write('H/')
-	if '/pkgcache:' not in mounts:
-		write('C/')
-	if 'swap:' not in mounts:
-		write('S/')
-	write(color_str('O/L/I/F) §7>> '))
+	else:
+		if boot_mode == 'UEFI' and '/efi:' not in mounts:
+			write('E/')
+		if '/boot:' not in mounts:
+			write('B/')
+		if '/home:' not in mounts:
+			write('H/')
+		if '/pkgcache:' not in mounts:
+			write('C/')
+		if 'swap:' not in mounts:
+			write('S/')
+		write('O/')
+	write('L/I/F) §7>> ')
 
 	# TODO Optionally allow to use /boot instead of /efi on UEFI systems
 
@@ -1006,23 +1138,23 @@ def list_used_pars(hide_guide=False):
 	if len(sel) > 0:
 		# Partition identification
 		if sel == 'L' or sel == 'I' or sel == 'F':
-			command = lsblk_cmd
+			cmd = lsblk_cmd
 			if sel == 'I':
-				command = blkid_cmd
+				cmd = blkid_cmd
 			elif sel == 'F':       # 'DEV    TYPE       SIZE MOUNT'
-				# TODO Strip /dev/loop0 entry from 'fdisk -l' ouput
-				command = 'fdisk -l' # lsblk -n -o NAME,FSTYPE,SIZE,MOUNTPOINT
+				cmd = 'fdisk -l' # lsblk -n -o NAME,FSTYPE,SIZE,MOUNTPOINT
 			write_ln()
-			Cmd.exec(command)
+			Cmd.exec(cmd, '', False)
 			write('\nPress ENTER to continue...')
 			input()
 		else:
 			if 'root:' not in mounts and not (sel == 'R' or sel == 'S' or sel == 'O'):
-				write_ln('\n' + color_str('§2ERROR: §0Please mount a root partition before continuing!'))
+				write_ln('\n§2ERROR: §0Please mount a root partition before continuing!')
 				write('\nPress ENTER to continue...')
 				input()
 			else:
 				# TODO Don't allow selections that are already mounted!! (e.g. /,/efi,swap etc)
+				# e.g. only allow visible entries to be chosen
 				par_opt_handler(sel)
 		#input()
 		mounting_menu()
@@ -1030,24 +1162,25 @@ def list_used_pars(hide_guide=False):
 	if 'root:' not in mounts:
 		# TODO Message?
 		mounting_menu()
+
 	if boot_mode == 'UEFI' and '/efi:' not in mounts:
 		write_ln()
-		write_msg(color_str('Would you like to continue without mounting a §3/efi §7partition §0(§2y§0/§3N§0)? §7>> '))
+		write_msg('Would you like to continue without mounting a §3/efi §7partition §0(§2y§0/§3N§0)? §7>> ')
 		ans = ''
 		ans = input().upper().replace('YES', 'Y')
 		if ans != 'Y':
 			mounting_menu()
 
 def mounting_menu():
-	global mount_menu_visit_counter
+	global menu_visit_counter
 	print_header('Mounting Partitions')
 	write_ln('   Select an option by pressing the corresponding key.')
-	write(color_str("   §3Tip: §0If you don't need to mount partitions"))
-	if mount_menu_visit_counter > 0:
+	write("   §3Tip: §0If you don't need to mount partitions")
+	if menu_visit_counter > 0:
 		write(' anymore')
-	mount_menu_visit_counter += 1
+	menu_visit_counter += 1
 	# TODO Make user type 'done' instead to continue?
-	write_ln(color_str(', just press ENTER'), 2)
+	write_ln(', just press ENTER', 2)
 	list_used_pars()
 
 # Mirrorlist sorting
@@ -1059,7 +1192,7 @@ def sort_mirrors():
 
 	if ret_val == 0:
 		write_msg('Creating a backup of the local mirrorlist file...', 1)
-		ret_val = Cmd.log('mv /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.bak')
+		ret_val = Cmd.log('cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.bak')
 		write_status(ret_val)
 
 		write_msg('Sorting mirrors using reflector, please wait...', 1)
@@ -1069,9 +1202,9 @@ def sort_mirrors():
 		# TODO Setup pacman hook to update later in chroot
 		Cmd.log('cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.reflector')
 
-		write_msg('Refreshing pacman package databases...', 1)
-		ret_val = Pkg.refresh_dbs() # TODO No need for 'True' ?
-		write_status(ret_val)
+		#write_msg('Refreshing pacman package databases...', 1)
+		#ret_val = Pkg.refresh_dbs()
+		#write_status(ret_val)
 		time.sleep(0.25)
 	# else: TODO Update 'pacman-mirrorlist' pkg instead
 
@@ -1086,22 +1219,22 @@ def base_install(sys_root = '/mnt/'):
 	extra_pkgs += f'{base_pkgs} ' if len(base_pkgs) > 0 else ''
 	extra_pkgs += 'terminus-font ' if font.startswith('ter-') else ''
 	# Userspace utilities for filesystems
-	blkid = Cmd.output(blkid_cmd)
-	extra_pkgs += 'exfat-utils ' if '"exfat"' in blkid else ''
-	extra_pkgs += 'ntfs-3g ' if '"ntfs"' in blkid else ''
+	#blkid = Cmd.output(blkid_cmd)
+	#extra_pkgs += 'exfat-utils ' if '"exfat"' in blkid else ''
+	#extra_pkgs += 'ntfs-3g ' if '"ntfs"' in blkid else ''
 	extra_pkgs = f' {extra_pkgs.rstrip()}' if len(extra_pkgs) > 0 else ''
 
-	# TODO Check pkgcache another way
 	cache_arg = '-c ' if os.path.exists(sys_root + 'pkgcache') else ''
 
-	ps_args = f'{cache_arg}{sys_root} base python{extra_pkgs}'
+	# TODO Pick components carefully instead of including the whole base group
+	# TODO Force installation to not trigger (Updating linux initcpios) to run it seperately at the end
+	ps_args = f'{cache_arg}{sys_root} pigz openresolv base python{extra_pkgs}'
 
 	write_msg('Installing base system using pacstrap, please wait...', 1)
-	# TODO Report on progress
 	ret_val = Cmd.log('pacstrap ' + ps_args)
 	write_status(ret_val)
 	if ret_val != 0: # Base install failure
-		write_ln(color_str('§2ERROR: §0Base system install failed. Check /tmp/setup.log for the details.'))
+		write_ln('§2ERROR: §0Base system install failed. Check /tmp/setup.log for the details.')
 		exit(11) # 11 = Base system install failure
 
 	# Umount cache device (most likely external) to avoid adding to fstab
@@ -1109,8 +1242,9 @@ def base_install(sys_root = '/mnt/'):
 		Cmd.log(f'umount {sys_root}pkgcache') # e.g. 'umount /mnt/pkgcache'
 
 	write_msg('Generating static filesystem table...', 1)
-	# TODO Format properly otherwise (no repeating)
-	ret_val = Cmd.exec(f'genfstab -U {sys_root} >>{sys_root}etc/fstab')
+	fstab = f'{sys_root}etc/fstab'
+	Cmd.suppress(f'echo >>{fstab}')
+	ret_val = Cmd.exec(f'genfstab -U {sys_root} >>{fstab}')
 	write_status(ret_val)
 
 	# Remount cache device if specified
@@ -1125,8 +1259,8 @@ def start_chroot(sys_root = '/mnt/'):
 	Cmd.suppress(f'cp /proc/cpuinfo {sys_root}proc/') # For CPU detection in chroot
 
 	if multibooting:
-		Cmd.suppress(f'mkdir {sys_root}hostrun')
-		Cmd.suppress('mount --bind /run {sys_root}hostrun')
+		Cmd.log(f'mkdir {sys_root}hostrun')
+		Cmd.log(f'mount --bind /run {sys_root}hostrun')
 
 	ret_val = IO.write(f'{sys_root}etc/vconsole.conf', f'KEYMAP="{keymap}"\nFONT="{font}"')
 	if ret_val != 0:
@@ -1136,25 +1270,24 @@ def start_chroot(sys_root = '/mnt/'):
 	Cmd.log(f'chmod 755 {sys_root}root/{script_fn}')           # e.g. 'chmod 755 /mnt/root/setup.py'
 	Cmd.log(f'cp "{script_root}/config.py" "{sys_root}root/"') # e.g. 'cp "/root/config.py" "/mnt/root/"'
 
-	log("\n#\n# Start of chroot log\n#")
+	Cmd.suppress(f'touch {sys_root}chroot') # Add indicator file for chroot
+
+	# TODO Check if log is copied again?
+	log('\n#\n# Start of chroot log\n#')
 	Cmd.suppress(f'cp /tmp/setup.log {sys_root}') # Copy log over to chroot
 	Cmd.suppress(f'ln -sf {sys_root}setup.log /tmp/setup.log')
-	# TODO Check if it works?
 
 	write_msg('Chrooting into the new install...', 1)
 	ch_args = f' {mbr_grub_dev}' if len(mbr_grub_dev) > 0 else ''  # Pass grub device to script
-	Cmd.exec(f'arch-chroot {sys_root} /root/{script_fn}{ch_args}') # e.g. 'arch-chroot /mnt/ /root/setup.py'
+	# TODO Use https://wiki.archlinux.org/index.php/systemd-nspawn instead to fix some problems?
+	Cmd.exec(f'arch-chroot {sys_root} /root/{script_fn}{ch_args}') # e.g. 'arch-chroot /mnt/ /root/setup.py /dev/sda'
 
 # Chroot specific install steps
 
 def load_hw_info():
-	global cpu_type, mbr_grub_dev, bat_present, disc_tray_present, bt_present, vm_env
+	global mbr_grub_dev, bat_present, disc_tray_present, camera_present, bt_present, fdd_present, vm_env
 
-	# CPU type needed for ucode
-	cpu_type = 'intel' if Cmd.suppress('cat /proc/cpuinfo | grep -i GenuineIntel') == 0 else 'amd'
-
-	if len(sys.argv) == 2: # Assume MBR grub dev e.g. '/dev/sda4'
-		mbr_grub_dev = sys.argv[1]
+	if len(sys.argv) == 2: mbr_grub_dev = sys.argv[1] # Assume MBR grub dev e.g. '/dev/sda'
 
 	# Update battery presence
 	ret_val = Cmd.suppress('ls /sys/class/power_supply | grep -i bat')
@@ -1164,8 +1297,11 @@ def load_hw_info():
 	blkid = Cmd.output("blkid")
 	disc_tray_present = ('/dev/sr' in blkid or '/dev/sg' in blkid)
 	if not disc_tray_present: # Try other alternative methods
-		ret_val = Cmd.log("dmesg | egrep -i 'cdrom|dvd|cd/rw|writer'")
+		ret_val = Cmd.suppress("dmesg | egrep -i 'cdrom|dvd|cd/rw|writer'")
 		disc_tray_present = (ret_val == 0)
+	# Update camera presence
+	ret_val = Cmd.suppress("dmesg | egrep -i 'camera|webcam'")
+	camera_present = (ret_val == 0)
 	# Update floppy disk drive presence
 	fdd_present = ('/dev/fd' in blkid)
 
@@ -1173,11 +1309,11 @@ def load_hw_info():
 
 	# Update Bluetooth device presence
 	# TODO Check for false-positives
-	bt_present = Cmd.log('rfkill list | grep -i blue') == 0
+	bt_present = Cmd.suppress('rfkill list | grep -i blue') == 0
 	if not bt_present:
-		bt_f1 = Cmd.log('dmesg | grep -i blue') == 0
-		bt_f2 = Cmd.log('lsusb | grep -i blue') == 0 # TODO Improve USB BT adapter detection
-		bt_f3 = Cmd.log('lspci | grep -i blue') == 0
+		bt_f1 = Cmd.suppress('dmesg | grep -i blue') == 0
+		bt_f2 = Cmd.suppress('lsusb | grep -i blue') == 0 # TODO Improve USB BT adapter detection
+		bt_f3 = Cmd.suppress('lspci | grep -i blue') == 0
 		bt_present = bt_f1 or bt_f2 or bt_f3
 
 	# Update virtualized state
@@ -1196,15 +1332,13 @@ def load_hw_info():
 		except:
 			pass
 
-
-
 def timezone_setup():
 	write_msg('Settings datetime & timezone settings...', 1)
 	ret_val = Cmd.log(f'ln -sf /usr/share/zoneinfo/{timezone} /etc/localtime')
 	# TODO Find a better way to use the variable 'use_localtime'
 	timescale = 'localtime' if use_localtime else 'utc'
 	Cmd.log(f'hwclock --systohc --{timescale}')
-	Cmd.log('timedatectl set-local-rtc ' + '0' if timescale == 'utc' else '1')
+	Cmd.log('timedatectl set-local-rtc ' + ('0' if timescale == 'utc' else '1'))
 	write_status(ret_val)
 	if ret_val != 0:
 		log(f"[setup.py:timezone_setup()] ERROR: Couldn't set timezone as '{timezone}'. Most likely cause: invalid timezone")
@@ -1268,8 +1402,10 @@ def locale_setup():
 def ufw_setup():
 	write_msg('Setting up uncomplicated firewall...', 1)
 	errors = Pkg.install('ufw')
+	if de != '':
+		errors += Pkg.install('gufw')
+	#errors += Cmd.log('ufw enable')
 	#errors += Cmd.log('systemctl enable ufw')
-	# TODO Need to run '# ufw enable' as well
 	write_status(errors)
 
 	#write_msg("Setting up basic ufw rules...", 1)
@@ -1289,8 +1425,8 @@ def ufw_setup():
 	#	errors += Cmd.log('ufw limit SSH')
 
 	#if web_server_type > 0:
-	#	errors += Cmd.log('ufw allow HTTP')
-	#	errors += Cmd.log('ufw allow HTTPS')
+	#	errors += Cmd.log('ufw allow http')
+	#	errors += Cmd.log('ufw allow https')
 
 	# TODO Allow more services once instlalled e.g. 'KTorrent' on KDE DE etc
 
@@ -1300,7 +1436,7 @@ def networking_setup():
 	global hostname
 	# Generate hostname based on motherboard model
 	if hostname == '':
-		hostname = 'Arch-'
+		#hostname = 'Arch-'
 		if vm_env != 'vmware':
 			try:
 				hostname += IO.read_ln('/sys/devices/virtual/dmi/id/board_name').rstrip() # e.g. 'Z270N-WIFI'
@@ -1320,19 +1456,44 @@ def networking_setup():
 
 	# /etc/hosts
 	write_msg("Generating hosts file...", 1)
-  # TODO Proper formatting
+	# TODO Proper formatting
 	hosts = '# hosts - static table lookup for hostnames\n127.0.0.1	localhost\n::1		localhost\n127.0.1.1	§.localdomain	§'.replace('§', hostname)
 	ret_val = IO.write('/etc/hosts', hosts)
 	log(f'\n/etc/hosts\n==========\n{hosts}\n==========')
 	write_status(ret_val)
 
 	# NetworkManager
-	write_msg("Setting up NetworkManager, please wait...", 1)
-	errors = Pkg.install('networkmanager')
-	errors += Cmd.log('systemctl enable NetworkManager')
-	Cmd.suppress('shopt -s xpg_echo')
-	# TODO Fix
-	Cmd.exec('echo "polkit.addRule(function(action, subject) {\n\tif (action.id.indexOf("org.freedesktop.NetworkManager.") == 0 && subject.isInGroup("network")) {\n\t\treturn polkit.Result.YES;\n\t}\n});" >/etc/polkit-1/rules.d/50-org.freedesktop.NetworkManager.rules')
+	manager = ('NetworkManager' if use_networkmanager else 'dhcpcd')
+	write_msg(f'Setting up {manager}, please wait...', 1)
+	errors = Pkg.install('dnsmasq')
+	if use_networkmanager:
+		errors += Pkg.install('networkmanager modemmanager mobile-broadband-provider-info usbutils usb_modeswitch rp-pppoe')
+		errors += Cmd.log('systemctl enable NetworkManager')
+		if not nm_rand_mac_addr:
+			file = '/etc/NetworkManager/conf.d/00-no-rand-wifi-scan-mac-addr.conf' # /etc/NetworkManager/NetworkManager.conf
+			ul = '=' * len(file)
+			contents = '# Disable randomizing Wi-Fi NIC MAC address when scanning to avoid some issues\n[device]\nwifi.scan-rand-mac-address=no'
+			Cmd.exec(f'echo "{contents}" >' + file, '', False)
+			log(f'\n{file}\n{ul}\n{contents}\n{ul}\n')
+	else:
+		# TODO Implement more precise method to only start on select interfaces e.g. 'dhcpcd@enp1s0' etc
+		errors += Pkg.install('dhcpcd dialog wpa_supplicant') # ifplugd
+		errors += Cmd.log('systemctl enable dhcpcd')
+
+	# 1.1.1.1 DNS
+	resolv_conf = '# Generated by ArchInstaller.py (1.1.1.1 DNS)\nnameserver 1.1.1.1\nnameserver 1.0.0.1\nnameserver 2606:4700:4700::1111\nnameserver 2606:4700:4700::1001'
+	IO.write('/etc/resolv.conf', resolv_conf)
+	log(f'\n/etc/resolv.conf\n================\n{resolv_conf}\n================')
+
+	Cmd.log('shopt -s xpg_echo')
+	# TODO Turn this to a function
+	# TODO Fix warning: directory permissions differ on /usr/share/polkit-1/rules.d/ (fs: 750  pkg: 755)
+	file = '/etc/polkit-1/rules.d/50-org.freedesktop.NetworkManager.rules'
+	ul = '=' * len(file)
+	contents = 'polkit.addRule(function(action, subject) {\n\tif (action.id.indexOf("org.freedesktop.NetworkManager.") == 0 && subject.isInGroup("network")) {\n\t\treturn polkit.Result.YES;\n\t}\n});'
+	Cmd.exec(f'echo "{contents}" >' + file, '', False)
+	log(f'\n{file}\n{ul}\n{contents}\n{ul}\n')
+
 	write_status(errors)
 
 	if enable_firewall:
@@ -1340,39 +1501,58 @@ def networking_setup():
 
 def aur_setup():
 	write_msg('Installing dependencies for AUR support, please wait...', 1)
-	ret_val = Pkg.install('base-devel git')
+	# TODO Setup git properly (subversion etc)
+	pkgs = 'base-devel git'
+	if use_ccache:
+		pkgs += ' ccache'
+		file = '/etc/ccache.conf'
+		ul = '=' * len(file)
+		contents = '# Set maximum cache size to 24 GB\nmax_size = 24G'
+		Cmd.exec(f'echo "{contents}" >' + file, '', False)
+		log(f'\n{file}\n{ul}\n{contents}\n{ul}\n')
+		Cmd.log('export PATH=/usr/lib/ccache/bin:$PATH USE_CCACHE=1')
+	ret_val = Pkg.install(pkgs)
 	write_status(ret_val)
-	if ret_val == 0: # Git install successfull
+	if ret_val == 0: # base-devel & git install successfull
 		write_msg('Setting up temporary aurhelper user...', 1)
 		errors = Cmd.log('useradd -m -g users -G wheel aurhelper')
-		errors += Cmd.suppress('cp /etc/sudoers /etc/sudoers.bak')
+		errors += Cmd.log('cp /etc/sudoers /etc/sudoers.bak')
 		# TODO Create an actual replace by line number function
 		# Give wheel group users sudo permission w/o pass
-		Cmd.suppress("chmod 770 /etc/sudoers")
-		errors += Cmd.exec("sed -i '85 s/^# //' /etc/sudoers") # > /etc/sudoers.tmp
-		#errors += Cmd.suppress('mv /etc/sudoers.tmp /etc/sudoers')
-		errors += Cmd.suppress('chmod 440 /etc/sudoers')
+		Cmd.log('chmod 770 /etc/sudoers')
+		errors += Cmd.log("sed -i '85 s/^# //' /etc/sudoers")
 		write_status(errors)
 
+		# Build & compress on all CPU cores
+		file = '/etc/makepkg.conf'
+		Cmd.log(f'chmod 770 {file}')
+		if optimize_aur_packages and (not pkgcache_enabled or optimize_cached_pkgs):
+			IO.replace_ln(file, 'CFLAGS="', f'CFLAGS="{cflags}"') # 40
+			IO.replace_ln(file, 'CXXFLAGS="', 'CXXFLAGS="${CFLAGS}"') # 41
+		IO.replace_ln(file,   '#MAKEFLAGS="', 'MAKEFLAGS="-j$(nproc)"') # 44
+		IO.replace_ln(file,   'BUILDENV=', f'BUILDENV=(!distcc color {"" if use_ccache else "!"}ccache !check !sign)') # 62
+		IO.uncomment_ln(file, 'BUILDDIR=') # 69
+		IO.replace_ln(file,   'COMPRESSGZ=(', 'COMPRESSGZ=(pigz -c -f -n)') # 130
+		IO.replace_ln(file,   'COMPRESSXZ=(', 'COMPRESSXZ=(xz -c -z - --threads=0)') # 132
+		Cmd.log(f'chmod 644 {file}')
+
 		write_msg('Fetching & installing yay from the AUR, please wait...', 1)
-		# TODO Cache yay build if cachedir found?
-		ret_val = Cmd.log('$ cd /tmp && git clone https://aur.archlinux.org/yay-bin.git && cd yay-bin && makepkg -sric --skippgpcheck --noconfirm --needed', 'aurhelper')
+		# TODO Cache the package to /pkgcache?
+		# TODO Fix "host not resolved" issues on desktop & laptop!!!
+		ret_val = Cmd.log('$ cd /tmp && git clone https://aur.archlinux.org/yay-bin.git && cd yay-bin && makepkg -si --skippgpcheck --noconfirm --noprogressbar --needed', 'aurhelper')
 		write_status(ret_val)
-		if ret_val == 0: # Yay install successfull
-			Cmd.log('rm -rf /tmp/yay-bin') # Delete old build dir
+		Cmd.log('cd && rm -rf /tmp/yay-bin')
+		if ret_val != 0: # Yay install failed
+			global enable_aur
+			enable_aur = False
+			Cmd.log('userdel -f -r aurhelper')
+			Cmd.log('cp /etc/sudoers.bak /etc/sudoers')
 
-			# Allow access to pkgcache AUR builddir
-			#if os.path.exists('/pkgcache'):
-				#Cmd.log('find /pkgcache/pkgcache/aur/ -name "*.lock" -type f -delete')
-				#Cmd.log('chown aurhelper:users /pkgcache/pkgcache/aur/')
-				#Cmd.log('chmod 777 /pkgcache/pkgcache/aur/') # 770
+		Cmd.log('chmod 440 /etc/sudoers')
 
-			# Optimize makepkg for building on all CPU cores
-			# TODO Other makepkg.conf optimizations
-			IO.replace_ln('/etc/makepkg.conf', '#MAKEFLAGS="', 'MAKEFLAGS="-j$(nproc)"')
+		# TODO Setup ccache w/ 8GB
 
 def user_setup():
-	# TODO https://www.reddit.com/r/openSUSE/comments/5pnaat/is_there_any_way_to_prevent_polkit_from_asking/
 	errors = 0
 	write_msg("Setting up all local user accounts...", 1)
 
@@ -1387,25 +1567,26 @@ def user_setup():
 		Cmd.log('groupadd -f sudo')
 		# TODO Replace with a proper function
 		# Give sudo group users sudo permission w/o pass
-		# TODO Check if '%' causes issues?
-		Cmd.log('sed -i "89s/.*/\\n## Allow members of group sudo to execute any commmand without a password\\n\%sudo ALL=(ALL) NOPASSWD: ALL\\n/" /etc/sudoers')
+		Cmd.log('sed -i "89s/.*/\\n## Allow members of group sudo to execute any commmand without a password\\n%sudo ALL=(ALL) NOPASSWD: ALL\\n/" /etc/sudoers')
 
 	for user in users.split(','):
 		# TODO Make 'is_restricted()' etc. extended functions of string?
 		restricted = User.is_restricted(user)
 		passwdless = User.is_passwdless(user)
-		add_args = 'restricted' if restricted else 'users -G wheel,storage,log,input,rfkill,network'
+		add_args = 'restricted' if restricted else 'users -G wheel,storage,disk,rfkill,network,input,log'
 		errors += Cmd.log(f'useradd -m -g {add_args} {user}')
 
 		if not restricted: # Add some more groups
 			if xorg_install_type != 0: Cmd.log(f'gpasswd -a {user} video')
 			# Allow user full access to media (e.g. mounting)
 			if disc_tray_present: Cmd.log(f'gpasswd -a {user} optical')
-			if fdd_present: Cmd.log(f'gpasswd -a {user} floppy')
+			if fdd_present:
+				Cmd.log(f'gpasswd -a {user} floppy')
+				Cmd.log('modprobe floppy')
+				Pkg.install('dosfstools mtools')
 			if web_server_type > 0: Cmd.log(f'gpasswd -a {user} http')
-			# TODO Printing & scanning setup, user groups: 'scanner sys lp'
-			if passwdless:
-				Cmd.log(f'gpasswd -a {user} sudo')
+			if enable_printing: Cmd.log(f'usermod -a -G scanner,sys {user}') # lp
+			if passwdless: Cmd.log(f'gpasswd -a {user} sudo')
 
 		if passwdless: # Allow logging in without password
 			pass
@@ -1421,14 +1602,14 @@ def user_setup():
 
 def multilib_setup():
 	write_msg('Including multilib repo in /etc/pacman.conf...', 1)
-	Cmd.suppress('cp /etc/pacman.conf /etc/pacman.conf.bak')
+	Cmd.log('cp /etc/pacman.conf /etc/pacman.conf.bak')
 	ln = IO.get_ln_number('/etc/pacman.conf', '#[multilib]') # should be ~93
 	if ln != -1:
 		# "[multilib]"
 		Cmd.log('chmod 770 /etc/pacman.conf')
-		errors = Cmd.exec(f'sed -i "{ln} s/^#//" /etc/pacman.conf')
+		errors = Cmd.log(f'sed -i "{ln} s/^#//" /etc/pacman.conf')
 		# "Include = /etc/pacman.conf.d/mirrorlist"
-		errors += Cmd.exec(f'sed -i "{ln+1} s/^#//" /etc/pacman.conf')
+		errors += Cmd.log(f'sed -i "{ln+1} s/^#//" /etc/pacman.conf')
 		Cmd.log('chmod 644 /etc/pacman.conf')
 		write_status(errors)
 
@@ -1436,8 +1617,10 @@ def multilib_setup():
 			write_msg('Refreshing pacman package databases...', 1)
 			ret_val = Pkg.refresh_dbs()
 			write_status(ret_val)
+
+			# TODO Copy package database to '/pkgcache/pkgcache/pkgs.db' etc for possible offline install
 		else:
-			Cmd.suppress('cp /etc/pacman.conf.bak /etc/pacman.conf')
+			Cmd.log('cp /etc/pacman.conf.bak /etc/pacman.conf')
 	else:
 		write_status(1)
 
@@ -1458,10 +1641,14 @@ def lts_kernel_setup():
 	errors += Pkg.install('linux-lts')
 	write_status(errors)
 
+def update_grub():
+	return Cmd.log('grub-mkconfig -o /boot/grub/grub.cfg')
+
 def bootloader_setup():
 	# TODO Systemd-boot alternative to GRUB?
 	write_msg('Fetching dependencies for the GRUB bootloader...', 1)
 	pkgs = 'grub dosfstools'
+	cpu_type = cpu_identifier.split('_', 1)[0] # e.g. 'intel' / 'amd'
 	pkgs += '' if len(vm_env) > 0 else f' {cpu_type}-ucode'
 	ret_val = Pkg.install(pkgs)
 	write_status(ret_val)
@@ -1476,8 +1663,40 @@ def bootloader_setup():
 		write_status(ret_val)
 
 	write_msg('Creating initial GRUB config, please wait...', 1)
-	ret_val = Cmd.log('grub-mkconfig -o /boot/grub/grub.cfg')
-	write_status(ret_val)
+	errors = update_grub()
+
+	# Do some GRUB config modifications
+	Cmd.log(f'chmod 770 {grub_conf}')
+	# TODO Uncomment '#GRUB_ENABLE_CRYPTODISK=y' if LUKS encrypted
+	# TODO Set GRUB_GFXMODE to monitor res e.g. '1920x1080'
+
+	IO.uncomment_ln(grub_conf, 'GRUB_COLOR_NORMAL=')
+	IO.uncomment_ln(grub_conf, 'GRUB_COLOR_HIGHLIGHT=')
+	IO.replace_ln(grub_conf, 'GRUB_DEFAULT=', 'GRUB_DEFAULT=saved')
+	IO.replace_ln(grub_conf, '#GRUB_SAVEDEFAULT=', 'GRUB_SAVEDEFAULT=true')
+	#IO.uncomment_ln(grub_conf, 'GRUB_SAVEDEFAULT=')
+
+	if not multibooting:
+		Cmd.log(f'sed -i "18s/.*/GRUB_FORCE_HIDDEN_MENU=true\\n/" {grub_conf}')
+		# TODO Add "GRUB_DISABLE_SUBMENU=y" at the end
+		IO.replace_ln(grub_conf, 'GRUB_TIMEOUT=', 'GRUB_TIMEOUT=0')
+		IO.replace_ln(grub_conf, '#GRUB_HIDDEN_TIMEOUT=', 'GRUB_HIDDEN_TIMEOUT=0')
+		IO.uncomment_ln(grub_conf, 'GRUB_HIDDEN_TIMEOUT_QUIET=true')
+
+		# Allow to show GRUB menu when holding SHIFT on most systems
+		#Cmd.log('cd /etc/grub.d/ && curl https://git.io/vMIFi -Lso 31_hold_shift && chmod a+x ./31_hold_shift; cd') # 21_...
+
+		grub_part = 'gpt' if boot_mode == 'UEFI' else 'msdos'
+		IO.replace_ln(grub_conf, 'GRUB_PRELOAD_MODULES=', f'GRUB_PRELOAD_MODULES="part_{grub_part}"')
+	else:
+		IO.replace_ln(grub_conf, 'GRUB_TIMEOUT=', 'GRUB_TIMEOUT=3') # TODO Keep as default 5?
+
+	Cmd.log(f'chmod 644 {grub_conf}')
+
+	errors += update_grub()
+	write_status(errors)
+
+
 
 def x_setup():
 	mid = 'minimal' if xorg_install_type == 1 else 'the'
@@ -1495,28 +1714,36 @@ def vm_setup():
 	# TODO Turn into a function, changeable users int to select all,unrestricted etc. users?
 	unres_users = User.get_unrestricted_users()
 
+	errors += Pkg.install(f'linux{kernel_suffix}-headers dkms')
+
 	# TODO Check vbox shares
+	# TODO Fix all issues w/ VBox virtualization
 	if vm_env == 'vbox':
-		pkgs = 'virtualbox-guest-modules-arch virtualbox-guest-utils' + ('-nox ' if xorg_install_type == 0 else '')
+		pkgs = 'virtualbox-guest-dkms virtualbox-guest-utils' + ('-nox ' if xorg_install_type == 0 else '')
 		errors += Pkg.install(pkgs)
 		errors += Cmd.log('systemctl enable vboxservice')
-		errors += Cmd.log('modprobe -a vboxguest vboxsf vboxvideo')
+		#errors += Cmd.log('modprobe -a vboxguest vboxsf vboxvideo')
 		# TODO execute VBoxClient-all when X is enabled?
+		# rcvboxdrv
+
+		# TODO Make sure "systemd-modules-load" service is enabled
 
 		# TODO Check if path is correct & works?
-		Cmd.log('mkdir -p /media')
-		Cmd.log('chmod 770 /media') # 755
-		Cmd.log('chown root:vboxsf /media')
+		#Cmd.log('mkdir -p /media')
+		#Cmd.log('chmod 770 /media') # 755
+		#Cmd.log('chown root:vboxsf /media')
+		# TODO '# mount -t vboxsf -o gid=1000,uid=1000 Shared /media/Shared'
 		if len(unres_users) > 0:
 			for user in unres_users:
 				errors += Cmd.log(f'gpasswd -a {user} vboxsf')
 	elif vm_env == 'vmware':
-		# https://wiki.archlinux.org/index.php/VMware/Installing_Arch_as_a_guest#Performance_Tips
-		# TODO Make mkinitcpio.conf modifications:
-		# /etc/mkinitcpio.conf
-		# MODULES="... vmw_balloon vmw_pvscsi vsock vmw_vsock_vmci_transport ..."
-		# mkinitcpio -p linux
-		errors += Pkg.install(f'linux{kernel_suffix}-headers dkms fuse gtkmm3 open-vm-tools')
+		# TODO Find something that adds to errors without loggin (AUR disabled shows ERROR status)
+		Cmd.log('chmod 770 /etc/mkinitcpio.conf')
+		IO.replace_ln('/etc/mkinitcpio.conf', 'MODULES=(', 'MODULES=(vmw_balloon vmw_pvscsi vmw_vmci vmwgfx vmxnet3 vsock vmw_vsock_vmci_transport)')
+		Cmd.log('chmod 644 /etc/mkinitcpio.conf')
+		Cmd.log('mkinitcpio -p linux')
+
+		errors += Pkg.install('fuse open-vm-tools' + (' gtkmm3' if xorg_install_type > 0 else ''))
 		errors += Pkg.aur_install('open-vm-tools-dkms')
 		errors += Cmd.log('systemctl enable vmtoolsd vmware-vmblock-fuse')
 		#Cmd.log('systemctl start vmtoolsd vmware-vmblock-fuse') # errors +=
@@ -1537,7 +1764,7 @@ def vm_setup():
 			log(f"\n[setup.py:vm_setup()] Output of 'vmware-hgfsclient':\n'{shares}'\n")
 			if len(shares) > 0:
 				shares = shares.split('\n') # 'VMShare','Other\040Share'
-				Cmd.exec("echo '# vmware shared folders' >>/etc/fstab")
+				Cmd.exec("echo '# vmware shared folders' >>/etc/fstab", '', False)
 				for share in shares:
 					s_share = share.replace('\\040', ' ').strip() # Share w/ spaces
 					share = s_share.replace(' ', '\\040') # Share in fstab-friendly format
@@ -1546,19 +1773,22 @@ def vm_setup():
 						Cmd.log(f"chmod 770 '/vmshare/{s_share}'") # 777
 						Cmd.log(f"chown root:users '/vmshare/{s_share}'")
 						# e.g. '.host:/VMShare	/vmshare/VMShare	fuse.vmhgfs-fuse	allow_other,auto_unmount,nofail	0	0'
-						Cmd.exec("echo '.host:/§	/vmshare/§	fuse.vmhgfs-fuse	allow_other,auto_unmount,nofail	0	0' >>/etc/fstab".replace('§', share))
-				Cmd.exec("echo >>/etc/fstab")
+						# TODO Also use 'noatime' mount option?
+						Cmd.exec("echo '.host:/§	/vmshare/§	fuse.vmhgfs-fuse	allow_other,auto_unmount,nofail	0	0' >>/etc/fstab".replace('§', share), '', False)
+				Cmd.exec("echo >>/etc/fstab", '', False)
 
 	write_status(errors)
 
 def audio_setup():
 	# TODO Add plain ALSA support
 	write_msg('Setting up audio support via pulseaudio...', 1)
-	errors = Pkg.install('pulseaudio pulseaudio-alsa pamixer libpulse')
+	errors = Pkg.install('pulseaudio pulseaudio-alsa alsa-utils pamixer libpulse') # (lib32-)alsa-oss
 
 	# Media codecs
 	# TODO Add back after gstreamer 1.15: gst-plugins-bad (broken NVDEC fixed)
 	errors += Pkg.install('gst-libav gst-plugins-base gst-plugins-good gst-plugins-ugly realtime-privileges')
+	if 'nvidia' not in video_drv:
+		errors += Pkg.install('gst-plugins-bad')
 
 	# Event sounds
 	errors += Pkg.install('libcanberra libcanberra-pulse libcanberra-gstreamer')
@@ -1580,16 +1810,20 @@ def bt_setup():
 	errors += Cmd.log('systemctl enable bluetooth')
 	write_status(errors)
 
-	# TODO Fix FAIL?
-	write_msg('Installing BT audio support, please wait...', 1)
-	errors = 0
 	# TODO Add ALSA support
-	if enable_aur:
+	write_msg('Installing BT audio support, please wait...', 1)
+	errors = Pkg.install('pulseaudio-bluetooth')
+
+	#errors = 0
+	#if enable_aur:
 		# Extra codecs
-		Pkg.remove('pulseaudio-bluetooth') # Just to make sure no conflicts happen
-		errors += Pkg.aur_install('libldac pulseaudio-modules-bt-git')
-	else:
-		errors += Pkg.install('pulseaudio-bluetooth')
+		#Pkg.remove('pulseaudio-bluetooth', False, False) # Just to make sure no conflicts happen
+		#errors += Pkg.aur_install('libldac pulseaudio-modules-bt-git')
+		# pulseaudio-bluetooth-a2dp-gdm-fix
+		# gluez-git 
+		# bluetooth.service: "ExecStart=/usr/lib/bluetoothd -E"
+	#else:
+	#	errors += Pkg.install('pulseaudio-bluetooth')
 
 	# Auto-enable BT on startup (TODO use tlp config on laptops)
 	if not bat_present:
@@ -1611,6 +1845,7 @@ def vga_setup():
 	if vm_env == '':
 		# e.g. 'nvidia corporation gm204 [geforce gtx 970]'
 		if 'nvidia' in vga_out:
+			video_drv = 'nvidia'
 			# Card driver detection
 			fermi_gpus = [ 'gf100','gf104','gf106','gf108','gf110','gf114','gf116','gf117','gf119' ] # 390xx
 			kepler_gpus = [ 'gk104','gk106','gk107','gk110','gk208','gk210','gk20a' ] # 390xx
@@ -1640,12 +1875,50 @@ def vga_setup():
 								break
 			log(f"\n[setup.py:vga_setup()] Detected NVIDIA card type: '{card}'\n")
 
+			# Video acceleration
+			if enable_aur:
+				errors += Pkg.aur_install('libva-vdpau-driver-chromium')
+			else:
+				errors += Pkg.install('libva-vdpau-driver')
+
+			# Remove other vulkan 
+			Pkg.remove('vulkan-intel', False, False)
+			Pkg.remove('vulkan-radeon', False, False)
+
+			if card == 'F' or card == 'K':
+				# nvidia-390xx, NVIDIA cards from around 2010-2011
+				video_drv += '-390'
+				errors += Pkg.install(f'nvidia-390xx{kernel_suffix} nvidia-390xx-utils nvidia-390xx-settings')
+				if enable_multilib:
+					errors += Pkg.install('lib32-nvidia-390xx-utils')
+			elif card == 'T':
+				# nvidia-340xx, NVIDIA cards from around 2006-2010
+				video_drv += '-340'
+				Pkg.remove('libglvnd') # To avoid conflicts
+				errors += Pkg.install(f'nvidia-340xx{kernel_suffix} nvidia-340xx-utils')
+				if enable_multilib:
+					errors += Pkg.install('lib32-nvidia-340xx-utils')
+			elif card == 'U':
+				# use noveau, NVIDIA cards from <= 2006
+				mesa_install_type = 2
+				video_drv += '-noveau'
+				errors += Pkg.install('xf86-video-nouveau')
+			else:
+				# Expect current NVIDIA cards from around 2010 onwards
+				errors += Pkg.install(f'nvidia{kernel_suffix} nvidia-utils nvidia-settings')
+				if enable_multilib:
+					errors += Pkg.install('lib32-nvidia-utils')
+
 			# TODO Remove /etc/X11/xorg.conf and other discrete configs?
 			# Bumblebee driver for NVIDIA Optimus systems
-			if 'intel' in vga_out:
+
+			# Bumblebee setup
+			if gpu_has_switchable_gfx and 'intel' in vga_out:
 				mesa_install_type = 1
-				video_drv = 'bumblebee'
-				errors += Pkg.install('bumblebee xf86-video-intel')
+				video_drv += '/bumblebee'
+				errors += Pkg.install('primus bbswitch xf86-video-intel')
+				if enable_multilib:
+					errors += Pkg.install('lib32-virtualgl lib32-primus')
 
 				unres_users = User.get_unrestricted_users()
 				if len(unres_users) > 0:
@@ -1655,32 +1928,6 @@ def vga_setup():
 				errors += Cmd.log('systemctl enable bumblebeed')
 				if enable_multilib:
 					errors += Pkg.install('lib32-virtualgl')
-
-			# TODO Check if matching works
-			if card == 'F' or card == 'K':
-				# nvidia-390xx, NVIDIA cards from around 2010-2011
-				video_drv += ('' if video_drv == '' else '-') + 'nvidia-390'
-				errors += Pkg.install(f'nvidia-390xx{kernel_suffix} nvidia-390xx-utils nvidia-390xx-settings')
-				if enable_multilib:
-					errors += Pkg.install('lib32-nvidia-390xx-utils')
-			elif card == 'T':
-				# nvidia-340xx, NVIDIA cards from around 2006-2010
-				video_drv += ('' if video_drv == '' else '-') + 'nvidia-340'
-				Pkg.remove('libglvnd') # To avoid conflicts
-				errors += Pkg.install(f'nvidia-340xx{kernel_suffix} nvidia-340xx-utils')
-				if enable_multilib:
-					errors += Pkg.install('lib32-nvidia-340xx-utils')
-			elif card == 'U':
-				# use noveau, NVIDIA cards from <= 2006
-				mesa_install_type = 2
-				video_drv += ('' if video_drv == '' else '-') + 'noveau'
-				errors += Pkg.install('xf86-video-nouveau')
-			else:
-				# Expect current NVIDIA cards from around 2010 onwards
-				video_drv += ('' if video_drv == '' else '-') + 'nvidia'
-				errors += Pkg.install(f'nvidia{kernel_suffix} nvidia-utils nvidia-settings')
-				if enable_multilib:
-					errors += Pkg.install('lib32-nvidia-utils')
 
 			if mesa_install_type < 2:
 				errors += Pkg.install('libvdpau')
@@ -1692,23 +1939,26 @@ def vga_setup():
 					# Generate X.org config
 					errors += Cmd.log('nvidia-xconfig')
 
-			# TODO
-			# kernel options: "nvidia-drm.modeset=1"
-			# /etc/mkinitcpio.conf
-			# MODULES=(... nvidia nvidia_modeset nvidia_uvm nvidia_drm)
-			# https://wiki.archlinux.org/index.php/NVIDIA#Pacman_hook
-			# https://wiki.archlinux.org/index.php/GDM#Use_Xorg_backend
-
-			# TODO Make sure vulkan-intel is not installed
+			# Setup kernel options only on compatible NVIDIA proprietary drivers
+			if '340' not in video_drv and 'nouveau' not in video_drv and 'bumblebee' not in video_drv:
+				# TODO kernel options: "nvidia-drm.modeset=1"
+				# Use '?' in order to avoid issues without proprietary drivers in the future
+				# 'MODULES=(... nvidia? nvidia_modeset? nvidia_uvm? nvidia_drm?)' in '/etc/mkinitcpio.conf' (https://wiki.archlinux.org/index.php/Mkinitcpio#MODULES)
+				# TODO Setup https://wiki.archlinux.org/index.php/NVIDIA#Pacman_hook
+				pass
 
 		# e.g. ''
-		elif 'amd' in vga_out or 'ati' in vga_out:
-			mesa_install_type = 2
+		elif 'amd' in vga_out or 'radeon' in vga_out or ' ati ' in vga_out:
 			video_drv = 'amdgpu'
+			mesa_install_type = 2
 			errors += Pkg.install('xf86-video-amdgpu vulkan-radeon')
+			# TODO libva-vdpau-driver(-chromium[AUR])
 			# TODO Only install on Vulkan capable GPUs
 			if enable_multilib:
 				errors += Pkg.install('lib32-vulkan-radeon')
+
+			# TODO Add switchable AMD GPU support
+			#if gpu_has_switchable_gfx
 
 			# libva-mesa-driver vulkan-radeon
 			# TODO 'amdgpu.dc=1' as kernel/module option
@@ -1717,21 +1967,15 @@ def vga_setup():
 
 		# e.g. 'intel corporation hasswell-ult integrated graphics'
 		elif 'intel' in vga_out:
-			mesa_install_type = 2
 			video_drv = 'intel'
-			errors += Pkg.install('xf86-video-intel vulkan-intel')
+			# TODO Check which generation to install proper driver "intel-media-driver" for new chips
+			mesa_install_type = 2
+			# TODO VDPAU driver?
+			errors += Pkg.install('xf86-video-intel vulkan-intel libva-intel-driver')
 			# TODO Only install on Vulkan capable GPUs
 			if enable_multilib:
 				errors += Pkg.install('lib32-vulkan-intel')
 
-			# TODO Enable DRI3
-			#/etc/X11/xorg.conf.d/20-intel.conf
-			#----------------------------------
-			#Section "Device"
-			#	Identifier  "Intel Graphics"
-			#	Driver      "intel"
-			#	Option      "DRI"    "3"
-			#EndSection
 	else: # Virtualized
 		mesa_install_type = 2
 		Cmd.exec('echo needs_root_rights=yes >/etc/X11/Xwrapper.config')
@@ -1739,76 +1983,133 @@ def vga_setup():
 			video_drv = 'vmware'
 			errors += Pkg.install('xf86-video-vmware')
 		else:
-			video_drv = 'fbdev'
-			errors += Pkg.install('xf86-video-fbdev')
+			video_drv = 'fbdev/vesa'
+			errors += Pkg.install('xf86-video-fbdev xf86-video-vesa')
 
-	if 'nvidia-340' not in video_drv:
+	if '340' not in video_drv:
 		errors = Pkg.install('libglvnd')
-		if enable_multilib:
-			errors += Pkg.install('lib32-libglvnd')
+		if enable_multilib: errors += Pkg.install('lib32-libglvnd')
 
 	if mesa_install_type > 0:
 		video_drv += '+mesa'
-		errors += Pkg.install('mesa libva-mesa-driver mesa-vdpau')
+		errors += Pkg.install('mesa') # libva-mesa-driver mesa-vdpau
+		if 'intel' not in video_drv:
+			errors += Pkg.install('libva-mesa-driver mesa-vdpau')
 		if enable_multilib:
-			errors += Pkg.install('lib32-mesa lib32-libva-mesa-driver lib32-mesa-vdpau')
+			errors += Pkg.install('lib32-mesa') # lib32-libva-mesa-driver lib32-mesa-vdpau
+			if 'intel' not in video_drv:
+				errors += Pkg.install('lib32-mesa lib32-libva-mesa-driver lib32-mesa-vdpau')
 		pass # TODO libva-mesa-driver mesa lib32-mesa ...
 
 	# TODO Only install on Vulkan capable GPUs
 	errors += Pkg.install('vulkan-icd-loader')
 	if enable_multilib:
-		errors += Pkg.install('lib32-vulkan-icd-loader')
-
-	# Video acceleration
-	if enable_aur:
-		errors += Pkg.aur_install('libva-vdpau-driver-chromium')
-	#else: errors += Pkg.install('libva-vdpau-driver')
+		errors += Pkg.install('lib32-vulkan-icd-loader lib32-libva')
 
 	log(f"\n[setup.py:vga_setup()] Video driver: '{video_drv}'")
 
 	write_status(errors)
 
+def lightdm_setup():
+	# TODO 'Setting up LightDM...' message, errors etc.
+	# TODO DE-specific customizations like Deepin-greeter etc
+	# TODO Use webkit theme? (lightdm-webkit2-greeter lightdm-webkit-theme-litarvan in normal repos)
+	errors = Pkg.install('lightdm accountsservice xorg-server-xephyr') # light-locker
+	errors += Cmd.log('systemctl enable lightdm')
+
+	lightdm_cfg = '/etc/lightdm/lightdm.conf'
+	ldm_greeter = 'gtk'
+
+	if de != 'xfce' and de != 'lxde': # Use GTK+ greeter
+		if de != 'dde':
+			if enable_aur:
+				if de != 'pantheon':
+					# TODO Configure slick greeter to actually look slick
+					errors += Pkg.aur_install('lightdm-slick-greeter lightdm-settings')
+					if errors == 0: ldm_greeter = 'slick'
+				else:
+					errors += Pkg.aur_install('lightdm-pantheon-greeter')
+					if errors == 0: ldm_greeter = 'pantheon'
+		else:
+			ldm_greeter = 'deepin'
+
+	# TODO Install other greeters here too
+	if ldm_greeter == 'gtk' or errors != 0:
+		# TODO Setup proper config
+		errors += Pkg.install('lightdm-gtk-greeter lightdm-gtk-greeter-settings')
+
+	# Set session greeter
+	Cmd.log('chmod 770 ' + lightdm_cfg)
+	errors += IO.replace_ln(lightdm_cfg, '#greeter-session=', f'greeter-session=lightdm-{ldm_greeter}-greeter')
+	Cmd.log('chmod 644 ' + lightdm_cfg)
+
+	return errors
+
+# TODO Extent to support pre-chroot as well
+def found_in_log(to_find=''):
+	if os.path.isfile('/setup.log'):
+		ret_val = Cmd.suppress(f'cat /setup.log | grep "{to_find}"') # '| grep -v "^[installed]"'?
+		return (ret_val == 0)
+	else: return False
+
+def hide_app(app_name = ''):
+	# TODO Add supports for multiple .desktop files (separated by spaces)
+	Cmd.exec(f"echo 'NoDisplay=true' >>{apps_path}/{app_name}.desktop")
+
 def de_setup():
-	# TODO Improve this
 	de_dislay = de.upper().replace('XFCE', 'Xfce').replace('CINNAMON', 'Cinnamon').replace('BUDGIE', 'Budgie').replace('LXQT', 'LXQt').replace('I3', 'i3')
+	# TODO If not dummy ... ?
 	write_msg(f'Installing components for the {de_dislay} desktop environment, please wait...', 1)
 	installed = True
 	errors = 0
 
+	# TODO https://wiki.archlinux.org/index.php/Pantheon
+
 	# TODO Auto-login support for 'passwdless_users' in all DEs?
 
-	if len(users) > 0:
-		for user in users.split(','):
-			Cmd.log('$ mkdir -p ~/.local/share/ cd ~/.local/share/ && mkdir fonts icons themes; cd', user)
+	# Create user directories
+	errors = Pkg.install('xdg-user-dirs-gtk')
+	for user in User.get_unrestricted_users():
+		Cmd.log(f'$ cd && mkdir -p .local/share/ && cd .local/share/ && mkdir fonts icons; cd', user)
+		# TODO Create ~/Applications dir with "System" & "User" app directories (/usr/share/applications, ~/.local/share/applications)
+		if de != 'kde':
+			Cmd.log(f'$ mkdir ~/.local/share/themes; cd', user)
+		else:
+			# TODO Make more KDE theme folders etc.
+			Cmd.log('mkdir -p ~/.local/share/plasma/ ~/.local/share/templates/ && cd ~/.local/share/plasma/ && mkdir look-and-feel desktopthemes ', user)
+			# TODO Don't create Public & Templates dirs w/ xdg-user-dirs (global KDE configs from GitHub)
+
+	if enable_multilib:
+		Pkg.install('lib32-gtk3')
+
+	# TODO Force installation to not trigger (Updating linux initcpios) to run it seperately at the end
+	# => Remove pacman hook for mkinitcpio
 
 	if de == 'gnome':
-		errors += Pkg.install('gnome gnome-extra')
+		errors += Pkg.install('gdm gnome-control-center folks gnome-keyring polkit-gnome gnome-initial-setup gnome-backgrounds gnome-menus gnome-user-share sushi nautilus-image-converter nautilus-share seahorse-nautilus rygel gnome-icon-theme-extras gnome-shell-extensions chrome-gnome-shell highlight evolution-bogofilter ibus-libpinyin ostree') # Base; telepathy gnome-session gnome-getting-started-docs mailnag-gnome-shell mailnag-goa-plugin
 		errors += Cmd.log('systemctl enable gdm')
-		# TODO Execute post-instlal ?
-		#export DISPLAY=:0
-		#Cmd.log('xhost +SI:localuser:gdm')
 
-		# TODO Don't remove gnome-sound-recorder when repo version is >= 3.28.2-2
-		# TODO Only install required packages instead of downloading 'gnome-extra' group and removing many
-		# TODO Use /tmp/ for temporary downloaded files!
-		Pkg.remove('gnome-sound-recorder gnome-dictionary gnome-usage gnome-recipes gnome-boxes gnome-music gnome-nettool gnome-documents gnome-characters gnome-font-viewer yelp accerciser five-or-more four-in-a-row hitori iagno gnome-klotski lightsoff gnome-nibbles quadrapassel gnome-robots swell-foop tali gnome-taquin gnome-tetravex', True)
+		errors += Pkg.install('eog file-roller gedit gnome-calculator gnome-calendar gnome-clocks gnome-disk-utility gnome-font-viewer gnome-logs gnome-music gnome-photos gnome-screenshot gnome-system-monitor gnome-terminal gnome-todo gnome-weather gnome-documents gnome-contacts gnome-tweaks totem seahorse') # Main apps; gnome-software rhythmbox gnome-weather gnome-contacts gnome-sound-recorder epiphany polari
+		#errors += Pkg.install('') # Misc apps
+		#errors += Pkg.install('') # App opt-deps; gedit-code-assistance
 
-		# Hide V4L test apps
-		Cmd.suppress('cd /usr/share/applications/')
-		Cmd.exec("echo 'NoDisplay=true' >>qv4l2.desktop")
-		Cmd.exec("echo 'NoDisplay=true' >>qvidcap.desktop")
+		hide_app('org.gnome.Evince')
 
-		Pkg.install('rhythmbox transmission-gtk')
+		# TODO Power adjustments on laptops
 
-		# GNOME specific optdepends
-		Pkg.install('chrome-gnome-shell gnome-icon-theme-extras gtk-engine-murrine gtk-engines highlight evolution-bogofilter eog-plugins festival fwupd gnuchess polkit-gnome fprintd tpm2-abrmd tpm2-tools ibus telepathy mtools libiscsi') # libgit2-glib razor
+		# TODO Embrace app window-menu buttons on all GTK apps (disable appmenu fully)
+		# TODO Enable chromium extension automatically?
 
+	#	Pkg.install('gtk-engine-murrine gtk-engines') # libgit2-glib razor
+
+		"""
 		if len(users) > 0:
-			# Install an icon pack
-			log('\n')
-			Cmd.exec('cd /tmp && git clone https://github.com/vinceliuice/Tela-icon-theme.git &>>/setup.log && ./Tela-icon-theme/Install &>>/setup.log; rm -rf Tela-icon-theme/')
-
 			# TODO Replace with proper keymap parsing from vconsole to xkbmap format
+
+			# TODO Wayland keymap
+
+			# X keymap
+			# TODO Seperate this to a function
 			kbmap = ''
 			if keymap.isalpha():
 				kbmap = keymap
@@ -1827,8 +2128,13 @@ def de_setup():
 				kbmap = 'us'
 			log(f"\n[setup.py:de_setup()] Set X kbmap: '{kbmap}'")
 
+			# TODO Check if §locale needs to be full 'en_US.UTF-8' form instead of 'en_US'
 			dconf = Cmd.output('curl https://git.io/fhNOG -Ls').strip().replace('§locale', LC_ALL).replace('§ntp', str(enable_ntp).lower()).replace('§xkb', kbmap)
 			ret_val = IO.write('/dconf.ini', dconf) # /tmp/dconf.ini
+			#Cmd.log('export DISPLAY=:0')
+			#for user in users.split(','):
+			#	Cmd.log('$ dbus-launch --exit-with-session dconf load / < /dconf.ini', user)
+
 			#if ret_val == 0:
 				#for user in users.split(','):
 					#restricted = User.is_restricted(user)
@@ -1837,22 +2143,26 @@ def de_setup():
 					# '$ (dbus-launch --exit-with-session) dconf load / < /tmp/dconf.ini'
 
 				#Cmd.log('rm -f /tmp/dconf')
-		else:
-			# TODO dconf for root user?
-			pass
+		"""
 
+		# Add some extensions
 		if enable_aur:
-			Pkg.install('pacman-contrib')
-			Pkg.aur_install('pamac-aur gnome-shell-extension-arch-update gnome-shell-extension-status-area-horizontal-spacing gnome-shell-extension-remove-dropdown-arrows')
-			Cmd.log('cp /etc/pamac.conf /etc/pamac.conf.bak')
-			IO.uncomment_ln('/etc/pamac.conf', 'EnableDowngrade')
-			IO.uncomment_ln('/etc/pamac.conf', 'EnableAUR')
-			IO.uncomment_ln('/etc/pamac.conf', 'CheckAURUpdates')
-			IO.replace_ln('/etc/pamac.conf', 'KeepNumPackages', 'KeepNumPackages = 2')
-			IO.uncomment_ln('/etc/pamac.conf', 'OnlyRmUninstalled')
+			# https://aur.archlinux.org/packages/?O=0&SeB=nd&K=gnome-shell-extension-&SB=v&SO=d&PP=50&do_Search=Go
+			Pkg.install('python-nautilus libcanberra gsound xdg-desktop-portal-gtk libappindicator-gtk2 libappindicator-gtk3') # libappindicator-sharp
+			Pkg.aur_install('gnome-shell-extension-gsconnect-git gnome-shell-extension-appindicator-git gnome-shell-extension-desktop-icons-git gnome-shell-extension-dash-to-panel-git gnome-shell-extension-dash-to-dock-git gnome-shell-extension-audio-output-switcher-git gnome-shell-extension-openweather-git gnome-shell-extension-night-light-slider-git gnome-shell-extension-lockkeys-git gnome-shell-extension-remove-dropdown-arrows gnome-shell-extension-status-area-horizontal-spacing')
 
+			if 'bumblebee' in video_drv:
+				Pkg.aur_install('gnome-shell-extension-bumblebee-status-git')
+
+		Pkg.install('gnome-software-packagekit-plugin')
+		
 		# Start Xorg session by default (for now: https://bugs.archlinux.org/task/53284)
-		if 'nvidia' in video_drv:
+		if 'nvidia' in video_drv and 'noveau' not in video_drv:
+			file = '/etc/gdm/custom.conf'
+			Cmd.log('chmod 770 ' + file)
+			IO.uncomment_ln(file, 'WaylandEnable=false')
+			Cmd.log('chmod 644 ' + file)
+
 			for user in users.split(','):
 				IO.replace_ln(f'/var/lib/AccountsService/users/{user}', 'XSession=', 'XSession=gnome-xorg')
 
@@ -1862,8 +2172,265 @@ def de_setup():
 		# NOTE Session type cannot be changed if in 'nopasswdlogin' group
 		#IO.write('/etc/pam.d/gdm-password', 'auth sufficient pam_succeed_if.so user ingroup nopasswdlogin')
 
+	# TODO Get packages from mate.txt
+	elif de == 'mate':
+		# Packages
+		errors += Pkg.install('mate mate-extra')
+		#errors += Pkg.install('')
+
+		errors += lightdm_setup() # Uses slick greeter, TODO Set wallpaper to one of the MATE ones
+
+	# TODO Setup packages properly
+	elif de == 'kde':
+		# TODO Remove every useless stuff
+		errors += Pkg.install('phonon-qt5 phonon-qt5-vlc qt5-translations sshfs qt5-graphicaleffects redshift') # phonon-qt5-gstreamer
+		# TODO Only install translations if something else than en_US (also) detected in locales
+		errors += Pkg.install('sddm plasma kde-applications')
+		#if enable_aur and Cmd.exists('pamac'): errors += Pkg.aur_install('pamac-tray-appindicator')
+		# TODO Remove useless KDE apps & games
+		Pkg.remove('kdevelop kdenlive umbrello kimagemapeditor cervisia kcachegrind kmix lokalize akonadi akonadiconsole okular ktimer kruler kget akregator kde-dev-utils juk sweeper kgpg filelight kmailtransport kirigami-gallery plasma-sdk kapptemplate kwordquiz khangman kiten klettres parley kanagram kbruch cantor kalgebra kig kmplot rocs artikulate kturtle kgeography step blinken minuet ktouch kalzium marble libkdegames kolourpaint kwave dragon konqueror kcharselect kteatime kate kdf kbackup kopete telepathy-qt', True) # qt5-tools
+
+		# No Wayland on NVIDIA until 5.16.x
+		if not 'nvidia' in video_drv or 'noveau' in video_drv:
+			errors += Pkg.install('plasma-wayland-session')
+
+		if install_de_apps:
+			Pkg.install('gwenview') # Basic programs
+			Pkg.install('kajongg ksudoku kpatience kmines kblocks') # Some games
+			if camera_present: Pkg.install('kamoso')
+			if fdd_present: Pkg.install('kfloppy')
+			if enable_aur:
+				Pkg.aur_install('elisa-git trojita-git')
+			else:
+				Pkg.install('juk kmail') # kdepim-addons
+
+		errors += Pkg.install('pkcs11-helper botan encfs cryfs kdeconnect ruby kipi-plugins kimageformats networkmanager-openconnect libnma qt5-imageformats qt5-virtualkeyboard qt5-networkauth qt5-websockets qt5-connectivity packagekit-qt5') # scim kdepim-addons
+
+		errors += Cmd.exec('cd /tmp; git clone https://github.com/MarianArlt/kde-plasma-chili.git &>>/setup.log && mv /tmp/kde-plasma-chili /usr/share/sddm/themes/')
+		# TODO Single-user autologin from /etc/sddm.conf
+		errors += Cmd.log('cp /usr/lib/sddm/sddm.conf.d/default.conf /etc/sddm.conf')
+		errors += IO.replace_ln('/etc/sddm.conf', 'Current=', 'Current=kde-plasma-chili')
+		if enable_aur:
+			errors += IO.replace_ln('/etc/sddm.conf', 'CursorTheme=', 'CursorTheme=capitaine-cursors')
+		else:
+			errors += IO.replace_ln('/etc/sddm.conf', 'CursorTheme=', 'CursorTheme=Breeze_Snow')
+		errors += Cmd.log('systemctl enable sddm')
+
+		# TODO Hide apps: Qt Assistant, Qt Linguist, Qt QDbusViewer, KUIViewer
+
+		# TODO Make directory skeleton for KDE applet, plasma-themes etc themes in ~/.local for all users
+		# TODO Setup settings for Plasma & other apps
+		# TODO Set cursor, dark theme w/ blur etc
+
+	elif de == 'xfce':
+		# TODO Remove this temporary GTK3 pkg "fix" when issue resolved
+		Cmd.log('pacman -Rdd --noconfirm --noprogressbar gtk3')
+		errors += Pkg.install('https://archive.archlinux.org/packages/g/gtk3/gtk3-3.24.5-1-x86_64.pkg.tar.xz')
+		file = '/etc/pacman.conf'
+		Cmd.log('chmod 770 ' + file)
+		IO.replace_ln('#IgnorePkg', 'IgnorePkg    = gtk3', file)
+		Cmd.log('chmod 644 ' + file)
+
+		errors += Pkg.install('xfce4 light-locker xfce4-goodies')
+		Pkg.install('gnome-screensaver gnome-keyring ffmpegthumbnailer libgsf libopenraw gtk-engines zip hddtemp ') # Opt-depends
+		Pkg.install('sylpheed xarchiver') # Apps (gucharmap)
+		Pkg.remove('xfce4-eyes-plugin xfce4-dict') # xfce4-mpc-plugin
+
+		if not bat_present:
+			Pkg.remove('xfce4-battery-plugin')
+
 		if not disc_tray_present:
-			Pkg.remove('brasero', True)
+			Pkg.remove('xfburn')
+
+		# Hide some app icons
+		# hide_apps('globaltime xfce4-sensors')
+		hide_app('globaltime')
+		hide_app('xfce4-sensors')
+
+		if enable_aur:
+			errors += Pkg.aur_install('menulibre')
+
+		errors += lightdm_setup() # Uses slick greeter, TODO Set wallpaper to one of the XFCE4 ones
+
+	elif de == 'dde':
+		# TODO https://wiki.archlinux.org/index.php/Deepin_Desktop_Environment#Customize_touchpad_gesture_behavior
+		errors += Pkg.install('deepin-anything-arch deepin-session-ui deepin-community-wallpapers deepin-turbo dtkwm deepin-screensaver-pp deepin-shortcut-viewer deepin-terminal') # deepin-anything-dkms deepin-kwin deepin-wallpapers-plasma deepin-topbar
+		errors += Pkg.install('qt5-translations gtk-engine-murrine zssh python-xdg easy-rsa proxychains-ng iw networkmanager-openconnect networkmanager-openvpn networkmanager-pptp networkmanager-strongswan networkmanager-vpnc network-manager-sstp')
+		errors += Pkg.install('redshift file-roller gedit')
+		if install_de_apps:
+			errors += Pkg.install('deepin-manual deepin-boot-maker deepin-calculator deepin-clone deepin-image-viewer deepin-movie deepin-music deepin-picker deepin-screen-recorder deepin-screenshot deepin-system-monitor deepin-voice-recorder geary')
+
+		# Hide some app icons
+		# hide_apps('redshift-gtk xscreensaver-properties')
+		hide_app('redshift-gtk')
+		hide_app('xscreensaver-properties')
+		if Cmd.exists('mpv'): hide_app('mpv')
+
+		# TODO Setup touchpad gestures: /usr/share/dde-daemon/gesture.json
+		# Sounds: /usr/share/sounds/deepin/stereo
+		# TODO NVIDIA proprietary issue: No background after resuming from standby
+		# TODO Utilize deepin-grub2-themes if multibooting? (/boot/grub/themes/deepin/theme.txt)
+
+		errors += lightdm_setup() # Uses deepin greeter
+
+	elif de == 'cinnamon':
+		errors += Pkg.install('cinnamon') # gdm
+
+		# Opt-depends
+		Pkg.install('cinnamon-translations gnome-color-manager gnome-online-accounts gtk-engines gtk3 ffmpegthumbnailer freetype2 libraqm libwebp djvulibre libspectre gnome-keyring libdmapsharing grilo-plugins notification-daemon libnotify fprintd jpegexiforient python-xdg nemo-fileroller nemo-image-converter nemo-seahorse nemo-share') # nemo-preview
+
+		# Other
+		Pkg.install('arc-gtk-theme')
+
+		# Apps
+		errors += Pkg.install('file-roller gnome-calculator gnome-disk-utility nemo seahorse redshift gnome-screenshot xed gnome-logs gnome-system-monitor gnome-terminal geary rhythmbox totem gpicview') # gnome-calendar
+
+		# Packages: xviewer(AUR) xviewer-plugins(AUR) xplayer(AUR) gparted tomboy dconf-editor
+		# TODO Mint-Y icons etc
+
+		if bt_present: errors += Pkg.install('blueberry')
+
+		if enable_aur:
+			Pkg.install('libgit2-glib')
+			errors += Pkg.aur_install('timeshift')
+			# AUR: mint-themes
+
+		errors += lightdm_setup() # Uses slick greeter + configure
+
+	# TODO Fix compositing issues...
+	elif de == 'budgie':
+		errors += Pkg.install('budgie-desktop budgie-extras gnome-backgrounds gnome-control-center gnome-screensaver network-manager-applet gnome-keyring rygel')
+		errors += Pkg.install('gtk-engines sushi highlight evolution-bogofilter') # polkit-gnome
+		errors += Pkg.install('nautilus eog file-roller gedit gnome-calculator gnome-disk-utility gnome-maps gnome-screenshot gnome-software gnome-system-monitor gnome-terminal gnome-weather rhythmbox grilo-plugins gnome-calendar') # gnome-sound-recorder dconf-editor gnome-tweaks
+
+		# TODO Other theming packages?
+
+		if enable_aur:
+			Pkg.aur_install('matcha-gtk-theme') # TODO Use 'Matcha-dark-azul' GTK theme
+
+		# TODO dconf restore for proper setting & themes etc
+
+		errors += lightdm_setup() # Uses slick greeter, TODO Set wallpaper to one of the Budgie ones?
+
+	elif de == 'lxde':
+		errors += Pkg.install('lxde')
+		errors += Pkg.install('xorg-xwininfo xorg-xprop xorg-xkill compton gnome-themes-standard ttf-droid python2-xdg fluidsynth libmad opusfile wireless_tools gtk-engines zip f2fs-tools gpart mtools network-manager-applet libnotify notification-daemon notify-osd pasystray paprefs xfce4-power-manager feh')
+		errors += Pkg.install('sylpheed xarchiver galculator leafpad xpad xfce4-screenshooter nm-connection-editor obconf rofi')
+		# TODO Redshift?
+		Pkg.remove('lxdm')
+
+		Cmd.log('cp /usr/bin/lxde-logout /usr/bin/lxde-logout.bak')
+		IO.replace_ln(f'{apps_path}/lxde-logout.desktop', 'Icon=', 'Icon=system-shutdown')
+		IO.replace_ln(f'{apps_path}/lxde-logout.desktop', 'Exec=', 'Exec=arch-logout')
+		IO.replace_ln(f'{apps_path}/xpad.desktop', 'Icon=', 'Icon=gnote')
+		hide_app('pasystray')
+
+		# TODO Arch profile icon
+		# TODO More complete mimeapps list for less frustration
+		# TODO Fix black on rounded corners in GTK
+		# TODO Language manager package?
+
+		ret_val = Cmd.suppress('find /sys/class/backlight/*')
+		if ret_val == 0:
+			errors += Pkg.install('xorg-xbacklight')
+
+		if bt_present:
+			errors += Pkg.install('blueman') # net-tools
+			# TODO Setup autostart?
+
+		if camera_present:
+			errors += Pkg.install('guvcview')
+
+		if enable_aur:
+			errors += Pkg.aur_install('menulibre') # ob-autostart
+			# TODO Create desktop icon for ob-autostart & use some autostart icon
+
+		lightdm_setup()
+
+		# TODO Make global (run after DE install => /DE.zip) & add ifs for DE specific actions
+		# TODO Pull down LXDE specific zip from GH & replace with actual URL
+		"""
+		Pkg.install('unzip')
+		Cmd.log('curl https://git.io/fjJCU -Lso /LXDE.zip')
+		Cmd.log('cd /; unzip -qo /LXDE.zip')
+		# TODO Fix permissions on zip
+		Cmd.log('cd /usr/bin && chmod 755 arch-logout') # lxde-logout
+		cmd = 'cd /home;'
+		for user in User.get_unrestricted_users():
+			cmd += f' chown -R {user}:users TMP/; cp -a ./TMP/. {user}/'
+		Cmd.log(cmd + '; rm -rf ./TMP/; cd')
+
+		if not bat_present:
+			Cmd.log('cd /etc/xdg/autostart/ && mv numlockx.desktop.bak numlockx.desktop; cd')
+		"""
+
+	elif de == 'lxqt':
+		errors += Pkg.install('--asexplicit libstatgrab libsysstat lm_sensors') # Opt-deps
+		errors += Pkg.install('sddm obconf-qt xdg-utils lxqt-themes lxqt-session lxqt-qtplugin lxqt-runner lxqt-panel lxqt-powermanagement lxqt-openssh-askpass lxqt-policykit lxqt-notificationd lxqt-config lxqt-admin lxqt-about lxqt-sudo pcmanfm-qt qterminal breeze-icons compton') # lxqt
+
+		if bt_present:
+			errors += Pkg.install('bluedevil')
+
+		if install_de_apps:
+			errors += Pkg.install('lximage-qt trojita screengrab ark kcalc qtpass partitionmanager')
+			if enable_aur:
+				errors += Pkg.install('featherpad qlipper compton-conf elisa-git')
+		#errors += Pkg.install('')
+
+		# TODO SDDM theme
+		# TODO Screenlock
+
+		if enable_aur:
+			Pkg.aur_install('nm-tray-git xscreensaver-arch-logo-nogdm archlinux-lxqt-theme sand-lxqt-theme lxqt-less-theme-git lxqt-arc-dark-theme-git') # lxqt-connman-applet
+		else:
+			Pkg.install('xscreensaver network-manager-applet')
+
+		Cmd.log('systemctl enable sddm')
+
+	elif de == 'i3':
+		# fm: pcmanfm (nemo?) vifm
+		# TODO Make the different pieces seem integrated together (configs)
+		errors += Pkg.install('mate-polkit i3-gaps i3lock termite rofi dunst lxappearance feh mousepad compton redshift pcmanfm xarchiver copyq arandr') # Main components (lxqt-policykit parcellite)
+		if bt_present: Pkg.install('blueman')
+		# /usr/lib/mate-polkit/polkit-mate-authentication-agent-1
+		# TODO Global polkit: allow to mount without password etc
+		# TODO Mousepad default EDITOR
+		# TODO Termite default TERM
+		# TODO No GTK3 CSD etc (export GTK_CSD=0)
+		# TODO Mod+ctrl+arrows to resize
+		# TODO Set $BROWSER $EDITOR & $
+		errors += Pkg.install('xorg-fonts-misc xorg-xfd xorg-xkill xorg-xprop xorg-xwininfo xorg-xdpyinfo xorg-xrandr xorg-xgamma perl-json-xs perl-anyevent-i3 imagemagick jpegexiforient python-gobject python-xdg perl-async-interrupt perl-ev perl-guard xclip maim network-manager-applet') # Opt-deps
+		errors += Pkg.install('--asexplicit jsoncpp', False)
+
+		if bat_present:
+			errors += Pkg.install('xfce4-power-manager')
+
+			#ret_val = Cmd.suppress('dmesg | grep i915')
+			# TODO No need to enable?
+			#if ret_val == 0: Cmd.log('systemctl enable systemd-backlight')
+			#else:
+				# 'i915.invert_brightness=1' kernel par?
+				#Cmd.log('systemctl mask systemd-backlight')
+
+		if enable_aur:
+			errors += Pkg.aur_install('polybar pulseaudio-ctl') # ttf-unifont siji-git
+		else:
+			errors += Pkg.install('i3blocks')
+
+		# Media player daemon
+		errors += Pkg.install('mpd ncmpcpp')
+
+		# https://youtu.be/3esPpe-fclI
+
+		# AUR PKG: menu-calc
+
+		# export CM_LAUNCHER=rofi
+
+		# opt-deps
+		#errors += Pkg.install('perl-anyevent-i3 perl-json-xs libnotify clipnotify urxvt-perls') # gtk2-perl
+
+	elif de == 'dummy': # Dummy desktop
+		pass
 
 	else: # Unknown desktop
 		errors = 1
@@ -1871,41 +2438,191 @@ def de_setup():
 
 	write_status(errors)
 
-	# TODO Setup flatpak properly (e.g. sandboxing etc)
-	# TODO if enable_flatpak:
-	Pkg.install('flatpak flatpak-builder')
-
-	# TODO if enable_snap:
-	#Pkg.install('snapd ...')
-
-	# TODO if enable_assistive_tech:
-	Pkg.install('festival')
-
-	# Every desktop optdepends
-	Pkg.install('ntfs-3g nfs-utils samba libgpod unzip p7zip unrar lrzip unace libheif poppler-data libdbusmenu-glib libdbusmenu-gtk3 libdbusmenu-gtk2 libgit2-glib python-pysocks python-pyopenssl python-brotlipy')
-
-	# Avahi
-	Cmd.log('systemctl disable systemd-resolved')
-	errors = Cmd.log('systemctl enable avahi-daemon')
-	errors += Pkg.install('nss-mdns')
-	errors += IO.replace_ln('/etc/nsswitch.conf', 'hosts: ', 'hosts: files mymachines mdns4_minimal [NOTFOUND=return] resolve [!UNAVAIL=return] dns mdns4 myhostname')
-	# TODO if UWF, open port 5353/UDP
-	#write_status(errors)
-
 	if installed:
-		write_msg('Installing some additional packages, please wait...', 1)
-		errors = Pkg.install('noto-fonts noto-fonts-emoji noto-fonts-cjk ttf-bitstream-vera ttf-dejavu ttf-liberation chromium libisofs')
+		if boot_mode == 'UEFI':
+			Pkg.install('fprintd fwupd tpm2-abrmd tpm2-tools')
 
-		# Use 'mtpfs' with better Android support if AUR is enabled
+		if de == 'gnome' or de == 'mate' or de == 'xfce' or de == 'dde' or de == 'cinnamon' or de == 'budgie': # or de == 'pantheon'
+			Pkg.install('gnome-mahjongg gnome-mines gnome-sudoku quadrapassel')
+
+		if Cmd.exists('v4l2-ctl'):
+			# Hide V4L test apps
+			# hide_apps('qv4l2 qvidcap')
+			hide_app('qv4l2')
+			hide_app('qvidcap')
+
+		# TODO Hide cheese if no camera present?
+		if Cmd.exists('cheese'):
+			if not camera_present:
+				hide_app('org.gnome.Cheese')
+			else:
+				Pkg.install('gnome-video-effects') # For some cheese effects
+
+		# Hide avahi application icons by default
+		if Cmd.exists('avahi-discover'):
+			# hide_apps('avahi-discover bssh bvnc')
+			hide_app('avahi-discover')
+			hide_app('bssh')
+			hide_app('bvnc')
+
+		if Cmd.exists('compton'):
+			hide_app('compton')
+
+		# TODO Move flatpak, snapd & other stuff outside DE to install on no-DE systems if required
+		if enable_flatpak:
+			write_msg('Installing support for flatpak packages...', 1)
+			errors = Pkg.install('flatpak-builder fakeroot fakechroot') # flatpak-builder
+			errors += Cmd.log('pacman -D --asexplicit flatpak')
+			"""
+			Dirs for .desktop files:
+			~/.local/share/flatpak/exports/share/applications
+			/var/lib/flatpak/exports/share/applications
+			"""
+			write_status(errors)
+
 		if enable_aur:
-			Pkg.remove('mtpfs')
-			errors += Pkg.aur_install('jmtpfs')
+			if enable_snap:
+				write_msg('Installing support for snap packages...', 1)
+				errors = Pkg.aur_install('snapd')
+				errors += Cmd.log('pacman -D --asexplicit snapd')
+				errors += Pkg.install('apparmor')
+				Cmd.log('systemctl enable snapd.socket apparmor snapd.apparmor')
+				Cmd.log('ln -s /var/lib/snapd/snap /snap') # For classic confinement snaps
+				# https://wiki.archlinux.org/index.php/AppArmor#Installation
+				# TODO Check if kernel parameters 'apparmor=1 security=apparmor' required on base kernels?
+				write_status(errors)
+			
+			if Cmd.exists('gnome-terminal'):
+				write_msg('Patching GNOME Terminal to include transparency...', 1)
+				Pkg.remove('gnome-terminal')
+				errors = Pkg.aur_install('gnome-terminal-transparency')
+				write_status(errors)
+
+		if enable_assistive_tech:
+			# TODO Setup onboard model M theme
+			write_msg('Installing support for assistive technologies...')
+			errors = Pkg.install('festival espeak speech-dispatcher orca mousetweaks onboard flite')
+			if de == 'kde':
+				errors += Pkg.install('kmag kmousetool kmouth') # TODO More packages here
+			if enable_aur:
+				if de == 'mate':
+					errors += Pkg.aur_install('xzoom') # magnifier
+			write_status(errors)
+
+		# Every desktop optdepends
+		write_msg('Installing some additional packages for proper system operation...', 1)
+		errors = Pkg.install('xdotool wmctrl exfat-utils ntfs-3g samba freerdp libgpod ibus libiscsi nfs-utils libnfs unzip unrar lrzip p7zip unace libheif poppler-data quota-tools mlocate vorbis-tools libappimage numlockx geoclue libwlocate') # unarchiver
+
+		if found_in_log('gvfs-goa: '):
+			errors += Pkg.install('--asexplicit gvfs-goa gvfs-google')
+		errors += Pkg.install('--asexplicit gvfs gvfs-afc gvfs-smb gvfs-gphoto2 gvfs-mtp gvfs-nfs')
+
+		errors += Pkg.install('python-setuptools python-pip python-pysocks python-brotlipy python-pyopenssl') # python-dbus python-idna python-cryptography python-h2 python-opengl
+		errors += Pkg.install('enchant hunspell-en_US aspell-en libmythes mythes-en') # Spell checking
+		if de != 'i3': # => de == 'kde': ...
+			errors += Pkg.install('libdbusmenu-glib libdbusmenu-gtk3 libdbusmenu-gtk2 appmenu-gtk-module')
+			ret_val = Cmd.suppress('pacman -Qqs | grep qt4')
+			if ret_val == 0: Pkg.install('appmenu-qt4') # TODO Move after custom_setup()?
+		if Cmd.exists('python2'): errors += Pkg.install('python2-setuptools python2-pip')
+
+		if disc_tray_present:
+			errors += Pkg.install('libisofs libdvdcss libbluray vcdimager libdvdread libburn cdrtools dvd+rw-tools cdrdao transcode cdparanoia dvdauthor udftools')
+		write_status(errors)
+
+		# Add IR packages
+		ret_val = Cmd.output('dmesg | grep -i " ir "')
+		if ret_val == 0: errors += Pkg.install('lirc')
+
+		write_msg('Configuring some additional fonts, please wait...', 1)
+		errors = Pkg.install('noto-fonts ttf-dejavu ttf-liberation ttf-inconsolata ttf-bitstream-vera ttf-anonymous-pro ttf-hack ttf-roboto ttf-fira-code') # xorg-fonts-misc adobe-source-sans-pro-fonts
+		if enable_aur: errors += Pkg.aur_install('terminus-font-ttf')
+		# Infinality fonts
+		ft2 = '/etc/profile.d/freetype2.sh'
+		Cmd.log('chmod 770 ' + ft2)
+		IO.replace_ln(ft2, '#export ', 'export FREETYPE_PROPERTIES="truetype:interpreter-version=38"')
+		Cmd.log('chmod 644 ' + ft2)
+		write_status(errors)
+
+		write_msg('Installing some additional applications, please wait...', 1)
+		errors = Pkg.install('firefox libreoffice-fresh pavucontrol')
+		IO.replace_ln(f'{apps_path}/pavucontrol.desktop', 'Icon=', 'Icon=gnome-volume-control')
+		if enable_aur:
+			errors += Pkg.aur_install('chromium-vaapi-bin pinta-git')
 		else:
-			errors += Pkg.install('mtpfs')
+			errors += Pkg.install('chromium pinta')
+
+		#Cmd.log(f'sed -i "37s/.*/NoDisplay=true\\n/" {apps_path}/libreoffice-draw.desktop')
+		Cmd.log(f'sed -i "37s/.*/NoDisplay=true\\n/" {apps_path}/libreoffice-base.desktop')
+		Cmd.log(f'sed -i "38s/.*/NoDisplay=true\\n/" {apps_path}/libreoffice-math.desktop')
+
+		# Hide from accessories category in XFCE etc.
+		if Cmd.exists('lightdm-gtk-greeter-settings'):
+			IO.replace_ln(f'{apps_path}/lightdm-gtk-greeter-settings.desktop', 'Categories=', 'Categories=GNOME;GTK;Settings;X-XFCE-SettingsDialog;X-XFCE-SystemSettings;')
+
+		if de == 'kde':
+			errors += Pkg.install('ktorrent')
+		elif de == 'lxqt':
+			errors += Pkg.install('transmission-qt')
+		else:
+			errors += Pkg.install('transmission-gtk')
+
+		if use_qt_apps or de == 'lxde': # Media player
+			errors += Pkg.install('vlc protobuf libmicrodns live-media libgoom2 projectm dav1d qt5-translations') # Qt5
+		# else 'parole' etc
+
+		if enable_printing: # Scanning / printing software
+			if use_qt_apps:
+				errors += Pkg.install('skanlite') # Qt5
+			else:
+				errors += Pkg.install('simple-scan')
+
+		if disc_tray_present: # Disc burning utility
+			if use_qt_apps:
+				errors += Pkg.install('k3b') # Qt5
+			else:
+				if de != 'xfce' and de != 'lxde':
+					errors += Pkg.install('brasero')
+				else:
+					errors += Pkg.install('xfburn')
+					IO.replace_ln(f'{apps_path}/xfburn.desktop', 'Icon=', 'Icon=brasero')
+		#else: # TODO Hide found apps
+
+		if Cmd.exists('libfm-pref-apps'):
+			IO.replace_ln(f'{apps_path}/libfm-pref-apps.desktop', 'Name=', 'Name=Preferred Applications (PCManFM)')
 
 		write_status(errors)
 
-		# TODO Printer & scanner pkgs: 'sane argyllcms system-config-printer python-pysmbc'
+		if len(users) > 0:
+			# Install an icon pack
+			write_msg("Installing 'Tela' icon theme...", 1)
+			ret_val = Cmd.exec('cd /tmp; git clone https://github.com/vinceliuice/Tela-icon-theme.git &>>/setup.log && ./Tela-icon-theme/Install &>>/setup.log; rm -rf Tela-icon-theme')
+			write_status(ret_val)
+
+		write_msg("Installing MTP support...", 1)
+		if enable_aur:
+			# jmtpfs
+			Pkg.remove('mtpfs', False, False)
+			errors = Pkg.aur_install('jmtpfs')
+			write_status(errors)
+
+			# pamac
+			if de != 'gnome':
+				write_msg("Setting up pamac...", 1)
+				errors = Pkg.install('pacman-contrib')
+				errors += Pkg.aur_install('pamac-aur')
+				Cmd.log('cp /etc/pamac.conf /etc/pamac.conf.bak')
+				IO.uncomment_ln('/etc/pamac.conf', 'EnableDowngrade')
+				errors += IO.uncomment_ln('/etc/pamac.conf', 'EnableAUR')
+				errors += IO.uncomment_ln('/etc/pamac.conf', 'CheckAURUpdates')
+				IO.replace_ln('/etc/pamac.conf', 'KeepNumPackages', 'KeepNumPackages = 2')
+				IO.uncomment_ln('/etc/pamac.conf', 'OnlyRmUninstalled')
+				categories = 'Categories=GNOME;GTK;System;X-XFCE-SettingsDialog;X-XFCE-SystemSettings;'
+				IO.replace_ln(f'{apps_path}/pamac-manager.desktop', 'Categories=', categories)
+				IO.replace_ln(f'{apps_path}/pamac-updater.desktop', 'Categories=', categories)
+		else:
+			# mtpfs
+			errors += Pkg.install('mtpfs')
+		write_status(errors)
 
 		if use_adobe_flash:
 			write_msg('Installing the Adobe Flash plugin...', 1)
@@ -1914,22 +2631,48 @@ def de_setup():
 	else:
 		write_status('A handler for this DE has not been added yet, no DE installed...', 4)
 
+def printing_setup():
+	write_msg('Installing packages for printing & scanning support, please wait...', 1)
+
+	# Avahi
+	Cmd.log('systemctl disable systemd-resolved')
+	errors = Pkg.install('avahi')
+	errors += Cmd.log('systemctl enable avahi-daemon')
+	errors += Pkg.install('nss-mdns')
+	errors += IO.replace_ln('/etc/nsswitch.conf', 'hosts: ', 'hosts: files mymachines mdns4_minimal [NOTFOUND=return] resolve [!UNAVAIL=return] dns mdns4 myhostname')
+	# TODO if UWF, open port 5353/UDP
+
+	# TODO Add printer & scanner auto-detection
+	Cmd.log('mkdir -p /etc/samba/')
+	Cmd.log('touch /etc/samba/smb.conf')
+	errors += Pkg.install('cups cups-pk-helper cups-pdf cloudprint-cups libcups gutenprint gsfonts foomatic-db foomatic-db-engine foomatic-db-gutenprint-ppds poppler-glib sane net-snmp colord-sane argyllcms system-config-printer samba') # libieee1284
+	if enable_multilib: errors += Pkg.install('lib32-libcups')
+	if bt_present: errors += Pkg.install('bluez-cups')
+
+	errors += Cmd.log('systemctl enable org.cups.cupsd.socket saned.socket')
+
+	for user in User.get_unrestricted_users():
+		Cmd.log(f'usermod -a -G cups {user}')
+
+	#errors += Pkg.install('python-pysmbc')
+
+	write_status(errors)
+
 def bootloader_extra_setup():
 	write_msg('Installing GRUB multiboot support dependencies...', 1)
 	ret_val = Pkg.install('ntfs-3g os-prober')
 	write_status(ret_val)
 
 	write_msg('Finding other bootloaders to add to GRUB menu...', 1)
-	# TODO Figure out lvme_tad slowdown if running grub-mkconfig after installing os-prober...
-	ret_val = Cmd.log('grub-mkconfig -o /boot/grub/grub.cfg')
+	ret_val = update_grub()
 	write_status(ret_val)
 
-	Cmd.suppress('umount /run/lvm')
+	Cmd.log('umount /run/lvm')
 
 def passwd_setup():
 	write_ln()
-	write_msg(color_str('Create a password for the §2root §0user:\n\n'))
-	for i in range(3):
+	write_msg('Create a password for the §2root §0user:\n\n')
+	for _ in range(3):
 		ret_val = Cmd.exec('passwd')
 		if ret_val == 0:
 			break
@@ -1954,8 +2697,8 @@ def passwd_setup():
 			user_type = 'restricted' if user in restricted_lst else 'regular'
 			write_ln()
 			start = (f'§7({user_count}/{full_user_count}) §0') if show_counter else ''
-			write_msg(color_str(f'{start}Create a password for the {user_type} user §3{user}§0:\n\n'))
-			for i in range(3):
+			write_msg(f"{start}Create a password for the {user_type} user §{('3' if user_type == 'regular' else '4')}'{user}'§0:\n\n")
+			for _ in range(3):
 				ret_val = Cmd.exec(f'passwd {user}')
 				if ret_val == 0:
 					break
@@ -1965,38 +2708,54 @@ def passwd_setup():
 	write_ln() # TODO Indent by 1?
 
 def chroot_setup():
-	global hostname, mbr_grub_dev, cpu_type
+	global hostname
 
 	if multibooting:
 		# LVM 10 sec slow scan temp fix when installing os-prober
-		Cmd.suppress('mkdir -p /run/lvm && mount --bind /hostrun/lvm /run/lvm')
+		Cmd.log('mkdir -p /run/lvm && mount --bind /hostrun/lvm /run/lvm')
 
 	# Update defailt about HW e.g. running in VM, cpu type, MBR boot dev etc.
 	load_hw_info()
 
-	log('[setup.py:chroot_setup()] HW details:')
-	# TODO Log more defails here
-	log(f"CPU                 '{cpu_type}'")
-	log(f"MBR_GRUB_DEV        '{mbr_grub_dev}'")
+	log('\n[setup.py:chroot_setup()] HW details:')
+	# TODO Log more details here
+	# TODO Show GPU info (seperate to get_gpu_details() func)
+	log(f"CPU_IDENTIFIER      '{cpu_identifier}'")
+	if boot_mode == 'BIOS/CSM':
+		log(f"MBR_GRUB_DEV        '{mbr_grub_dev}'")
+	if vm_env != '':
+		log(f"VM_ENV              '{vm_env}'")
 	log(f"BAT_PRESENT         '{bat_present}'")
 	log(f"DISC_TRAY_PRESENT   '{disc_tray_present}'")
+	log(f"CAMERA_PRESENT      '{camera_present}'")
 	log(f"BT_PRESENT          '{bt_present}'")
 	log(f"FLOPPY_PRESENT      '{fdd_present}'")
-	log(f"VM_ENV              '{vm_env}'")
 
 	write_status(0) # Change 'Chrooting...' status msg to DONE
 
+	if de != '':
+		Pkg.install('cronie')
+		Cmd.log('systemctl enable cronie')
+	Cmd.log('systemctl enable fstrim.timer')
+	sysctl_cfg = '/etc/sysctl.d/99-sysctl.conf'
+	Cmd.exec(f'echo vm.swappiness=10 >{sysctl_cfg}')
+	Cmd.exec(f'echo vm.vfs_cache_pressure=50 >>{sysctl_cfg}')
 	timezone_setup()
 	locale_setup()
-	networking_setup()
+
+	networking_setup() # TODO Add 1.1.1.1 DNS for IPv4 & 6 etc
+
 	if len(users) > 0: user_setup()
 	if enable_aur: aur_setup()
 	if enable_multilib: multilib_setup()
 
 	# Enable pacman eating dots
 	Cmd.log('chmod 770 /etc/pacman.conf')
+	IO.uncomment_ln('/etc/pacman.conf', 'Color')
 	Cmd.log('sed -i "38s/.*/ILoveCandy\\n/" /etc/pacman.conf')
 	Cmd.log('chmod 644 /etc/pacman.conf')
+
+	# TODO /usr on seperate partition => (... usr shutdown) hooks in mkinitcpio.
 
 	if ssh_server_type > 0: sshd_setup()
 	if use_lts_kernel: lts_kernel_setup()
@@ -2004,50 +2763,66 @@ def chroot_setup():
 	#if web_server_type > 0: ...
 	if xorg_install_type > 0: x_setup()
 	if len(vm_env) > 0: vm_setup()
+	if auto_detect_gpu: vga_setup()
 	if use_pulseaudio: audio_setup()
 	if bt_present: bt_setup()
-	if auto_detect_gpu: vga_setup()
+	if enable_printing: printing_setup()
 	if len(de) > 0: de_setup()
 
 	# TODO Use proper keymap globally in ALL DEs
 	# TODO Snapd & flatpak support?
-	# TODO Assistive techologies setup
-	# TODO Printing & scanning setup, user groups: 'scanner sys lp'
 	# TODO Check for other HW too e.g. fingerprint scanner (check lspci etc) & install proper packages
 	# TODO Wine setup?
 
 	if bat_present:
 		write_msg('Installing some packages for battery power savings...', 1)
-		ret_val = Pkg.install('tlp')
+		errors = Pkg.install('ethtool smartmontools x86_energy_perf_policy tlp tlp-rdw')
+		errors += Cmd.log('systemctl enable tlp tlp-sleep NetworkManager-dispatcher')
+		errors += Cmd.log('systemctl mask systemd-rfkill.service systemd-rfkill.socket')
+		# TODO Detect ThinkPad
+		# TODO Btrfs: 'SATA_LINKPWR_ON_BAT=max_performance' for these systems
+		# TODO Bumblebee: 'RUNTIME_PM_BLACKLIST="XX:XX.x"' & use GPU addr from 'lspci'
 		# TODO Setup tharmald as well?
-		write_status(ret_val)
-
-	# TODO Query for DVD/CD drive to install bluray etc support (disc_tray_present)
-	if disc_tray_present:
-		write_msg('Installing some packages for proper disc drive usage...', 1)
-		ret_val = Pkg.install('libisofs libdvdcss vcdimager lirc-utils') # dvdauthor
-		write_status(ret_val)
+		write_status(errors)
 
 	# TODO On KDE make theming direcoties automatically e.g. '~/.local/share/plasma/look-and-feel/' etc
 
 	# TODO Boot time improvements
 
 	custom_setup()
+
+	# Make AUR package build optimizations (after all caching)
+	if optimize_aur_packages and not (not pkgcache_enabled or optimize_cached_pkgs):
+		file = '/etc/makepkg.conf'
+		Cmd.log("chmod 770 /etc/makepkg.conf")
+		IO.replace_ln(file, 'CFLAGS="', f'CFLAGS="{cflags}"') # 40
+		IO.replace_ln(file, 'CXXFLAGS="', 'CXXFLAGS="${CFLAGS}"') # 41
+		Cmd.log("chmod 644 /etc/makepkg.conf")
+
+	# Log fstab
+	fstab = Cmd.output('cat /etc/fstab').rstrip()
+	log(f'\n/etc/fstab\n==========\n{fstab}\n==========\n')
+
 	if multibooting: bootloader_extra_setup()
 
 	if sudo_ask_pass:
-		Cmd.suppress('cp /etc/sudoers.bak /etc/sudoers')
+		Cmd.log('cp /etc/sudoers.bak /etc/sudoers')
 
-		# TODO Create an actual replace by line number function
 		# Give wheel group users sudo permission w/ pass
-		Cmd.suppress("chmod 770 /etc/sudoers")
-		Cmd.exec("sed -i '82 s/^# //' /etc/sudoers") #  > /etc/sudoers.tmp
-		#Cmd.suppress("mv /etc/sudoers.tmp /etc/sudoers")
-		Cmd.suppress("chmod 440 /etc/sudoers")
+		Cmd.log("chmod 770 /etc/sudoers")
+		Cmd.log("sed -i '82 s/^# //' /etc/sudoers")
+		Cmd.log("chmod 440 /etc/sudoers")
 
-	if enable_aur:
-		Cmd.log('userdel -f -r aurhelper')
-		# TODO Clear AUR package cache (if not cached to drive) ?
+	if enable_aur: Cmd.log('userdel -f -r aurhelper')
+	elif not sudo_ask_pass:
+		# Give wheel group users sudo permission w/o pass
+		Cmd.log("chmod 770 /etc/sudoers")
+		Cmd.log("sed -i '85 s/^# //' /etc/sudoers")
+		Cmd.log("chmod 440 /etc/sudoers")
+
+	write_msg('Clearing orphan packages...', 1)
+	Cmd.log('pacman -Rns $(pacman -Qdtq) --noconfirm')
+	write_status(0)
 
 	passwd_setup()
 
@@ -2055,7 +2830,6 @@ def chroot_setup():
 
 	# Move log to /var/log/
 	Cmd.log('mv /setup.log /var/log/')
-
 
 
 
@@ -2082,16 +2856,16 @@ log(f"[setup.py] Device boot mode: '{boot_mode}'")
 
 # TODO Add -R arg flag for chroot repair operations menu etc
 # TODO Add -N arg flag to run without internet and use only cached packages (show /pkgcache as mandatory, skip mirrorlist sorting, somehow update package databases / store database on cachedrive & replace system one?)
+# https://wiki.archlinux.org/index.php/Pacman/Restore_local_database
 
-debug = '-d' in args
-if debug:
-	Cmd.suppress('rm /tmp/setup.log') # Remove possible old
+debug = '-d' in args.lower()
+if debug: Cmd.suppress('rm /tmp/setup.log') # Remove possible old log
 
 # Load color scheme
 load_colors()
 
-write_msg(color_str('Arch §7Linux '))
-write(color_str(f'§4{boot_mode} §0live environment was detected. Press ENTER to continue...'))
+write_msg('Arch §7Linux ')
+write(f'§4{boot_mode} §0live environment was detected. Press ENTER to continue...')
 if not debug:
 	input()
 else:
@@ -2115,18 +2889,25 @@ write_status(ret_val)
 # Load font
 load_font()
 
-# Update used installer packages
-# TODO Check if the packages *actually* need to be updated (with pacman -Qs pkg?)
-write_msg('Updating pacman...', 1)
-ret_val = Pkg.install('pacman', False)
-write_status(ret_val)
+# TODO global outdated_pkgs?
+outdated_pkgs = Cmd.output('pacman -Quq') # TODO Split into array by '\n'
 
-write_msg('Updating the Arch Linux keyring, please wait...', 1)
-ret_val = Pkg.install('archlinux-keyring', False)
-write_status(ret_val)
+# Update used out-of-date installer packages
+# TODO Don't do partial updates?
+if 'pacman' in outdated_pkgs:
+	write_msg('Updating pacman...', 1)
+	ret_val = Pkg.install('pacman', False)
+	write_status(ret_val)
 
+if 'archlinux-keyring' in outdated_pkgs:
+	write_msg('Updating the Arch Linux keyring, please wait...', 1)
+	ret_val = Pkg.install('archlinux-keyring', False)
+	write_status(ret_val)
+
+# TODO Make detect up-to-date pkgs
+# TODO Don't run linux initcpios
 write_msg('Updating live environment partitioning utilities...', 1)
-ret_val = Pkg.install('parted btrfs-progs xfsprogs', False)
+ret_val = Pkg.install('parted btrfs-progs xfsprogs', False) # e2fsprogs efitools 
 write_status(ret_val)
 
 # NTP time synchronization
@@ -2149,7 +2930,9 @@ sys_root = f'/mnt{sys_root}'
 
 print_header('Installing Arch Linux')
 write_msg('Starting Arch Linux install process...', 1)
-ret_val = Pkg.install('arch-install-scripts', False)
+if 'arch-install-scripts' in outdated_pkgs:
+	ret_val = Pkg.install('arch-install-scripts', False)
+else: ret_val = 0
 write_status(ret_val)
 
 if '-M' not in args: sort_mirrors()
@@ -2164,9 +2947,8 @@ start_chroot(sys_root)
 Cmd.suppress(f'rm -f {sys_root}root/setup.py')
 Cmd.suppress(f'rm -f {sys_root}root/config.py')
 
-if os.path.exists('/mnt/pkgcache'):
-	#Cmd.suppress('chown root:root /pkgcache/pkgcache/aur/')
-	#Cmd.suppress('find /pkgcache/pkgcache/aur/ -name "*.lock" -type f -delete')
+if pkgcache_enabled:
+	#Cmd.log('chown -R root:root /pkgcache/pkgcache/aur')
 
 	# TODO Remove older package versions from the package cache (use modified time)
 	# Get package name (rsplit('-', 4)[1] ?)
@@ -2175,13 +2957,13 @@ if os.path.exists('/mnt/pkgcache'):
 	#write_msg('Checking package cache drive package versions...', 1)
 	#write_msg(f'Clearing {old_pkg_count} old package versions...', 1)
 
-	Cmd.suppress('cd && umount /mnt/pkgcache')
-	Cmd.suppress('rm -rf /mnt/pkgcache')
+	Cmd.suppress('cd && umount /mnt/pkgcache && rm -rf /mnt/pkgcache')
 	Cmd.suppress('mv /etc/pacman.conf.bak /etc/pacman.conf')
 
+# Move log on new system to '/var/log/setup.log'
 Cmd.suppress(f'cp -f {sys_root}var/log/setup.log /tmp/')
 #Cmd.suppress(f'cd && umount -R {sys_root[:-1]}') # TODO Fix causing /mnt to be busy
 
 # END OF SCRIPT
-write_ln(color_str('§3>> The install script is done!'), 2)
+write_ln('§3>> The install script is done!', 2)
 exit(0)
