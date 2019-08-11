@@ -1,7 +1,0 @@
-rofi.modi:       combi
-rofi.combi-modi: window,run,drun,ssh
-
-rofi.theme:      material
-rofi.font:       hack 10
-
-rofi.hide-scrollbar: true

@@ -1,2 +1,0 @@
-#!/bin/sh
-lxsession-logout --side top --banner "/usr/share/lxde/images/logout-banner-arch.png" --prompt "Log out of LXDE on Arch Linux (kernel `uname -r | cut -f1 -d"-"`)"

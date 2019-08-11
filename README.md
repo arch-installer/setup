@@ -1,5 +1,5 @@
 # ArchInstaller.py
-A semi-automatic & configurable Arch Linux installer script written in Python.  
+A semi-automatic & configurable Arch Linux installer script written in Python.
 DISCLAIMER: This is early software and will definitely change during the course of time.
 
 ## Development
@@ -8,18 +8,19 @@ DISCLAIMER: This is early software and will definitely change during the course 
 * Disk mounting & formatting menus (mostly) done
 * Base system can be installed
 * UEFI & BIOS/CSM support
+* Support for base, GNOME & KDE installs
 
 ## Screenshots
 ### Script initialization
-![Setup 1](/GitHub/setup-1.png)
+![Setup 1](/Images/setup-1.png)
 ### Disk partitioning
-![Setup 2](/GitHub/setup-2.png)
+![Setup 2](/Images/setup-2.png)
 ### Mounting partitions
-![Setup 3](/GitHub/setup-3.png)
+![Setup 3](/Images/setup-3.png)
 ### Installation
-![Setup 4](/GitHub/setup-4.png)
+![Setup 4](/Images/setup-4.png)
 ### Base system installed
-![Setup 5](/GitHub/setup-5.png)
+![Setup 5](/Images/setup-5.png)
 
 ## TODO
 * Make installer script UI localizable
