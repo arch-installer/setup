@@ -61,7 +61,7 @@ def custom_setup():
 		if wifi_setup:
 			write_msg("Setting up Wi-Fi hardware...")
 			errors = Pkg.install(f'crda {kernel}-headers')
-			errors = IO.uncomment_ln('/etc/conf.d/wireless-regdom', f'WIRELESS_REGDOM="{LC_ALL[3:5]}"') # e.g. "FI"
+			errors += IO.uncomment_ln('/etc/conf.d/wireless-regdom', f'WIRELESS_REGDOM="{LC_ALL[3:5]}"') # e.g. "FI"
 
 			bcm_install = Cmd.suppress('lspci | egrep -i "bcm|broadcom"') == 0
 			if bcm_install:
@@ -90,7 +90,8 @@ def custom_setup():
 		Cmd.log('chmod 770 ' + file)
 		IO.replace_ln(file, 'TLP_DEFAULT_MODE=', 'TLP_DEFAULT_MODE=BAT')
 		IO.replace_ln(file, '#CPU_SCALING_GOVERNOR_ON_AC=', 'CPU_SCALING_GOVERNOR_ON_AC=performance')
-		IO.uncomment_ln(file, 'CPU_SCALING_GOVERNOR_ON_BAT=')
+		IO.uncomment_ln(file, 'CPU_SCALING_GOVERNOR_ON_BAT=') # powersave
+		IO.replace_ln(file, 'RESTORE_DEVICE_STATE_ON_STARTUP=', 'RESTORE_DEVICE_STATE_ON_STARTUP=1')
 		Cmd.log('chmod 644 ' + file)
 
 
@@ -1748,7 +1749,7 @@ def bt_setup():
 	#else:
 	#	errors += Pkg.install('pulseaudio-bluetooth')
 
-	# Auto-enable BT on startup (TODO use tlp config on laptops)
+	# Auto-enable BT on startup (desktops)
 	if not bat_present:
 		errors += IO.replace_ln('/etc/bluetooth/main.conf', '#AutoEnable=false', 'AutoEnable=true')
 
@@ -2032,7 +2033,6 @@ def add_kernel_par(parameters='', only_default=True):
 		Cmd.log(f'sed \'{all_ln}s/.*/{all_pars}/\' -i /etc/default/grub')
 
 def get_configs(repo):
-	# TODO Permissions fix needed later for executables?
 	# TODO Put working stuff in /tmp?
 	# Fetch config archive
 	errors = Cmd.log(f'curl https://github.com/arch-installer/{repo}/archive/master.zip -Lso /configs-master.zip')
@@ -2263,14 +2263,19 @@ def de_setup():
 		errors += Pkg.install('cinnamon') # gdm
 
 		# Opt-depends
-		Pkg.install('cinnamon-translations gnome-color-manager gnome-online-accounts gtk-engines gtk3 ffmpegthumbnailer freetype2 libraqm libwebp djvulibre libspectre gnome-keyring libdmapsharing grilo-plugins libnotify fprintd python-xdg nemo-fileroller nemo-image-converter nemo-seahorse nemo-share') # nemo-preview
+		Pkg.install('cinnamon-translations gnome-color-manager gnome-online-accounts gtk-engines gtk3 ffmpegthumbnailer freetype2 libraqm libwebp djvulibre libspectre gnome-keyring libdmapsharing grilo-plugins libnotify fprintd python-xdg gtk-engine-murrine')
 
 		# Other
 		Pkg.install('arc-gtk-theme')
 
 		# Apps
 		if install_de_apps:
-			errors += Pkg.install('file-roller gnome-calculator gnome-disk-utility nemo seahorse redshift gnome-screenshot xed gnome-logs gnome-system-monitor gnome-terminal geary rhythmbox totem vinagre xreader') # gnome-calendar
+			errors += Pkg.install('file-roller gnome-calculator gnome-disk-utility nemo seahorse redshift gnome-screenshot xed gnome-logs gnome-system-monitor gnome-terminal rhythmbox totem vinagre xreader geary nemo-fileroller nemo-image-converter nemo-seahorse meld') # nemo-preview nemo-share
+
+			# KDE Connect
+			if enable_aur:
+				errors += Pkg.install('breeze-icons sshfs kde-cli-tools')
+				errors += Pkg.aur_install('indicator-kdeconnect-git')
 
 		# Packages: xplayer(AUR) gparted tomboy
 
@@ -2422,6 +2427,9 @@ def de_setup():
 		# TODO Move flatpak, snapd & other stuff outside DE to install on no-DE systems if required
 		if enable_flatpak:
 			write_msg('Installing support for flatpak packages...', 1)
+			errors = 0
+			if use_qt_apps: errors += Pkg.install('xdg-desktop-portal-kde')
+			else: errors += Pkg.install('xdg-desktop-portal-gtk')
 			errors = Pkg.install('flatpak-builder fakeroot fakechroot') # flatpak-builder
 			errors += Cmd.log('pacman -D --asexplicit flatpak')
 			"""
@@ -2493,9 +2501,21 @@ def de_setup():
 		ret_val = Cmd.output('dmesg | grep -i " ir "')
 		if ret_val == 0: errors += Pkg.install('lirc')
 
+		# Use GTK+ 2 theme for Qt5 apps to make them feel more native
+		# NOTE: This breaks default appearance of VirtualBox >= 6.0 & possibly others!
+		if not use_qt_apps:
+			Pkg.install('qt5-styleplugins')
+			file = '/etc/environment'
+			Cmd.log('chmod 770 ' + file)
+			Cmd.log(f'echo "QT_QPA_PLATFORMTHEME=gtk2" >> {file}')
+			Cmd.log('chmod 644 ' + file)
+
 		write_msg('Configuring some additional fonts, please wait...', 1)
-		errors = Pkg.install('noto-fonts ttf-dejavu ttf-liberation ttf-inconsolata ttf-bitstream-vera ttf-anonymous-pro ttf-hack ttf-roboto ttf-fira-code') # xorg-fonts-misc adobe-source-sans-pro-fonts
-		if enable_aur: errors += Pkg.aur_install('terminus-font-ll2-td1-otb')
+		errors = Pkg.install('noto-fonts ttf-dejavu ttf-liberation ttf-inconsolata ttf-bitstream-vera ttf-anonymous-pro ttf-roboto') # xorg-fonts-misc adobe-source-sans-pro-fonts
+		if enable_aur:
+			errors += Pkg.aur_install('terminus-font-ll2-td1-otb nerd-fonts-hack nerd-fonts-fira-code')
+		else:
+			errors += Pkg.install('ttf-fira-code ttf-hack')
 		# Infinality fonts
 		ft2 = '/etc/profile.d/freetype2.sh'
 		Cmd.log('chmod 770 ' + ft2)
@@ -2732,12 +2752,11 @@ def chroot_setup():
 	# else: remove "~/.hidden" etc files unused?
 
 	# TODO Use proper keymap globally in ALL DEs
-	# TODO Snapd & flatpak support?
 	# TODO Check for other HW too e.g. fingerprint scanner (check lspci etc) & install proper packages
 	# TODO Wine setup?
 
 	if bat_present:
-		write_msg('Installing some packages for battery power savings...', 1)
+		write_msg('Configuring some packages for battery power savings...', 1)
 		errors = Pkg.install('ethtool smartmontools x86_energy_perf_policy tlp tlp-rdw')
 		errors += Cmd.log('systemctl enable tlp tlp-sleep NetworkManager-dispatcher')
 		errors += Cmd.log('systemctl mask systemd-rfkill.service systemd-rfkill.socket')
