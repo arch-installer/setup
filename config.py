@@ -21,7 +21,8 @@ locales = 'en_US,fi_FI'
 # def. 'en_US.UTF-8'
 LANG = 'en_US.UTF-8'
 
-# Locale used for other localized UI content
+# Locale used for other localized UI content e.g. time & date
+# This should match your primary language
 # def. 'en_US.UTF-8'
 LC_ALL = 'fi_FI.UTF-8'
 
@@ -42,7 +43,7 @@ hostname = ''
 # NOTE All required users should be added here
 # Single user: e.g. 'user'
 # Multi-user:  e.g. 'user1,user2,user3,...'
-users = 'deathmist'
+users = 'user'
 
 # List of users that should not be added to groups other than 'restricted'
 # NOTE These users also won't have 'sudo' access
@@ -98,7 +99,7 @@ enable_snap = False
 
 # Should ufw be setup with some basic rules?
 # def. 'False'
-enable_firewall = True
+enable_firewall = False
 
 # 0 = Don't enable OpenSSH server
 # 1 = Spawn SSH daemon on connections (recommended)
@@ -121,20 +122,21 @@ web_server_type = 0
 kernel_type = 'zen'
 
 # Should GRUB multiboot support be included?
+# This will show a boot menu during startup instead of booting straight to Arch
 # def. 'False'
-multibooting = True
+multibooting = False
 
 # Should the system use localtime as the timescale instead of UTC?
 # NOTE This should be True when when multi-booting with Windows
 # def. 'False'
-use_localtime = True
+use_localtime = False
 
 # X.org display server install type
 # 0 = Don't install X explicitly
 # 1 = "Minimal" install (xorg-server & xorg-xinit + a few other pkgs)
 # 2 = Install full xorg package group
 # def. '1'
-xorg_install_type = 0
+xorg_install_type = 1
 
 # Should the GPU be automatically detected & approperiate driver packages be installed?
 # def. 'True'
@@ -147,19 +149,19 @@ gpu_has_switchable_gfx = False
 
 # Desktop environment to install
 # none     = Leave as a base install
+# cinnamon = Linux Mint's Cinnamon DE
 # gnome    = The GNOME 3 desktop environment
 # mate     = Forked GNOME 2 DE
 # kde      = KDE Plasma 5 DE
 # xfce     = XFCE 4 DE
 # dde      = Deepin Desktop Environment
-# cinnamon = Linux Mint's Cinnamon DE
 # budgie   = The Solus project's DE
 # lxde     = A lightweight X11 DE
 # lxqt     = The new upcoming DE to replace LXDE
 # i3       = A wm that can work as a DE (i3-gaps)
 # dummy    = Install extra packages meant for DE's without one (particularly useful for custom setups)
 # def. ''
-de = 'dummy'
+de = 'cinnamon'
 
 # Should many of the DE's default programs be installed?
 # They can be safely omitted for a more minimal or specific setup
@@ -168,6 +170,7 @@ install_de_apps = True
 
 # Pamac is a simple GTK+ interface to manage Arch Linux & AUR packages
 # NOTE: This enables AUR support to be enabled
+# Without this out of the box your only choice to manipulate software would be via the terminal w/ yay & pacman
 # def. 'False'
 install_pamac = False
 
@@ -178,7 +181,7 @@ use_pulseaudio = True
 # Virtual console font
 # See https://git.io/fjC5s for all options
 # def. 'default'
-font = 'ter-124n'
+font = 'ter-118n'
 
 # Should NetworkManager be used instead of dhcpcd?
 # NOTE This makes networking work out of the box™ but is less minimal
