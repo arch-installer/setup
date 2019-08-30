@@ -26,27 +26,23 @@ def custom_setup():
 
 	# Install custom packages
 	write_msg("Installing custom packages & applications...", 1)
-	errors = Pkg.install('bash-completion lsof strace psutils gnu-netcat reflector vim htop neofetch lm_sensors rsync pacman-contrib tree ctags')
+	errors = Pkg.install('bash-completion lsof strace psutils gnu-netcat reflector vim htop neofetch lm_sensors rsync pacman-contrib tree')
 	errors += Pkg.install('--asexplicit rhash', False)
 	if enable_aur:
 		errors += Pkg.aur_install('c-lolcat downgrade')
 
 	if de != '':
 		# Xorg, MIME, cursors, fonts etc
-		errors += Pkg.install('xorg-xkill xorg-xprop xorg-xrandr xorg-xauth x11-ssh-askpass xorg-fonts-alias perl-file-mimeinfo perl-net-dbus perl-x11-protocol capitaine-cursors noto-fonts-emoji noto-fonts-cjk lsd')
+		errors += Pkg.install('xorg-xkill xorg-xprop xorg-xrandr xorg-xauth x11-ssh-askpass xorg-fonts-alias perl-file-mimeinfo perl-net-dbus perl-x11-protocol capitaine-cursors noto-fonts-emoji noto-fonts-cjk lsd ctags trash-cli wget')
 
 		if vm_env == '':
-			errors += Pkg.install('discord')
+			errors += Pkg.install('code discord')
 
 			# Steam
 			if enable_multilib and not bat_present:
 				errors += Pkg.install('steam steam-native-runtime wqy-zenhei lib32-libldap')
 				Cmd.log(f'mv {apps_path}/steam-native.desktop {apps_path}/steam-native.desktop.bak')
 				IO.replace_ln(f'{apps_path}/steam.desktop', 'Name=', 'Name=Steam')
-
-			# VS Code
-			if enable_aur:
-				errors += Pkg.aur_install('visual-studio-code-bin')
 
 		# Powerline status for Vim
 		Cmd.log('python -m pip install -U powerline-status')
@@ -411,7 +407,7 @@ class Pkg:
 				yay_args = '--needed' if only_needed else ''
 				if len(yay_args) > 0: yay_args = ' ' + yay_args.strip()
 				errors = 0
-				ccache_args = 'export PATH=/usr/lib/ccache/bin:$PATH USE_CCACHE=1; ' if use_ccache else '' # TODO Optimize
+				ccache_args = 'export PATH=/usr/lib/ccache/bin:$PATH USE_CCACHE=1; ' if use_ccache else '' # TODO Optimize, use 'env' instead?
 				pkgs = pkgs.strip() # To mitigate user error
 				if pkgcache_enabled:
 					for pkg in pkgs.split(' '):
@@ -885,7 +881,7 @@ def par_opt_handler(opt):
 
 		write_ln()
 		# TODO Use proper stylized version of 'fs_type' e.g. get index & use from supported_fs_types[]
-		write_msg(f'Formatting {par} using {fs_type}...', 1)
+		write_msg(f'Formatting {par} using {fs_type.replace("fat", "fat32")}...', 1)
 		#format_cmd += ' -n ESP' if opt == 'E' else ''
 		ret_val = Cmd.log(f'{format_cmd} {par}') # e.g. 'mkfs.ext4 /dev/sda1'
 		write_status(ret_val)
@@ -1115,7 +1111,7 @@ def list_used_pars(hide_guide=False):
 def mounting_menu():
 	global menu_visit_counter
 	print_header('Mounting Partitions')
-	write_ln('   Select an option by pressing the corresponding key.')
+	write_ln('   Select an option by entering the corresponding key.')
 	write("   §3Tip: §0If you don't need to mount partitions")
 	if menu_visit_counter > 0:
 		write(' anymore')
@@ -1411,7 +1407,7 @@ def networking_setup():
 		#	log(f'\n{file}\n{ul}\n{contents}\n{ul}\n')
 	else:
 		# TODO Implement more precise method to only start on select interfaces e.g. 'dhcpcd@enp1s0' etc
-		errors += Pkg.install('dhcpcd dialog wpa_supplicant') # ifplugd
+		errors += Pkg.install('dhcpcd ifplugd wpa_supplicant dialog')
 		errors += Cmd.log('systemctl enable dhcpcd')
 
 	# 1.1.1.1 DNS
@@ -1582,7 +1578,7 @@ def update_grub():
 	return Cmd.log('grub-mkconfig -o /boot/grub/grub.cfg')
 
 def bootloader_setup():
-	# TODO Systemd-boot alternative to GRUB?
+	# TODO systemd-boot alternative to GRUB?
 	write_msg('Fetching dependencies for the GRUB bootloader...', 1)
 	pkgs = 'grub dosfstools'
 	cpu_type = cpu_identifier.split('_', 1)[0] # e.g. 'intel' / 'amd'
@@ -1617,7 +1613,7 @@ def bootloader_setup():
 		Cmd.log(f'sed "18s/.*/GRUB_FORCE_HIDDEN_MENU=true\\n/" -i {grub_conf}')
 		# TODO Add "GRUB_DISABLE_SUBMENU=y" at the end
 		IO.replace_ln(grub_conf, 'GRUB_TIMEOUT=', 'GRUB_TIMEOUT=0')
-		IO.replace_ln(grub_conf, '#GRUB_HIDDEN_TIMEOUT=', 'GRUB_HIDDEN_TIMEOUT=0')
+		#IO.replace_ln(grub_conf, '#GRUB_HIDDEN_TIMEOUT=', 'GRUB_HIDDEN_TIMEOUT=0')
 		IO.uncomment_ln(grub_conf, 'GRUB_HIDDEN_TIMEOUT_QUIET=true')
 
 		# TODO Allow to show GRUB menu when holding SHIFT on most systems
@@ -1872,10 +1868,10 @@ def vga_setup():
 			# TODO Only install on Vulkan capable GPUs
 			if enable_multilib:
 				errors += Pkg.install('lib32-vulkan-radeon')
-			# modprobe amdgpu
 
 			# TODO Add switchable AMD GPU support
-			#if gpu_has_switchable_gfx
+			#if gpu_has_switchable_gfx:
+				#add_kernel_par('radeon.dpm=1')
 
 			# libva-mesa-driver vulkan-radeon
 			# TODO 'amdgpu.dc=1' as kernel/module option
@@ -2091,7 +2087,7 @@ def de_setup():
 	# => Remove pacman hook for mkinitcpio
 
 	if de == 'gnome':
-		errors += Pkg.install('gdm gnome-control-center folks gnome-keyring polkit-gnome gnome-initial-setup gnome-backgrounds gnome-menus gnome-user-share sushi nautilus-image-converter nautilus-share seahorse-nautilus rygel gnome-icon-theme-extras gnome-shell-extensions chrome-gnome-shell highlight evolution-bogofilter ibus-libpinyin ostree sshfs gtk-engine-murrine gtk-engines gnome-terminal') # Base; telepathy gnome-session mailnag-gnome-shell mailnag-goa-plugin libgit2-glib razor gnome-remote-desktop
+		errors += Pkg.install('gdm gnome-control-center folks gnome-keyring polkit-gnome gnome-initial-setup gnome-backgrounds gnome-menus gnome-user-share sushi nautilus-image-converter nautilus-share seahorse-nautilus rygel gnome-icon-theme-extras gnome-shell-extensions chrome-gnome-shell highlight evolution-bogofilter ibus-libpinyin ostree sshfs gtk-engines gnome-terminal') # Base; telepathy gnome-session mailnag-gnome-shell mailnag-goa-plugin libgit2-glib razor gnome-remote-desktop
 		# TODO gnome-getting-started-docs after working on initial setup phase
 		errors += Cmd.log('systemctl enable gdm')
 
@@ -2241,7 +2237,7 @@ def de_setup():
 	elif de == 'dde':
 		# TODO https://wiki.archlinux.org/index.php/Deepin_Desktop_Environment#Customize_touchpad_gesture_behavior
 		errors += Pkg.install(f'deepin-anything-{("dkms" if use_dkms_pkgs else "arch")} deepin-session-ui deepin-community-wallpapers deepin-turbo dtkwm deepin-screensaver-pp deepin-shortcut-viewer deepin-terminal') # deepin-kwin deepin-wallpapers-plasma deepin-topbar
-		errors += Pkg.install('qt5-translations gtk-engine-murrine zssh python-xdg easy-rsa proxychains-ng iw networkmanager-openconnect networkmanager-openvpn networkmanager-pptp networkmanager-strongswan networkmanager-vpnc network-manager-sstp')
+		errors += Pkg.install('qt5-translations zssh python-xdg easy-rsa proxychains-ng iw networkmanager-openconnect networkmanager-openvpn networkmanager-pptp networkmanager-strongswan networkmanager-vpnc network-manager-sstp')
 		errors += Pkg.install('redshift file-roller gedit')
 		if install_de_apps:
 			errors += Pkg.install('deepin-manual deepin-boot-maker deepin-calculator deepin-clone deepin-image-viewer deepin-movie deepin-music deepin-picker deepin-screen-recorder deepin-screenshot deepin-system-monitor deepin-voice-recorder geary')
@@ -2263,7 +2259,7 @@ def de_setup():
 		errors += Pkg.install('cinnamon') # gdm
 
 		# Opt-depends
-		Pkg.install('cinnamon-translations gnome-color-manager gnome-online-accounts gtk-engines gtk3 ffmpegthumbnailer freetype2 libraqm libwebp djvulibre libspectre gnome-keyring libdmapsharing grilo-plugins libnotify fprintd python-xdg gtk-engine-murrine')
+		Pkg.install('cinnamon-translations gnome-color-manager gnome-online-accounts gtk-engines gtk3 ffmpegthumbnailer freetype2 libraqm libwebp djvulibre libspectre gnome-keyring libdmapsharing grilo-plugins libnotify fprintd python-xdg')
 
 		# Other
 		Pkg.install('arc-gtk-theme')
@@ -2271,6 +2267,7 @@ def de_setup():
 		# Apps
 		if install_de_apps:
 			errors += Pkg.install('file-roller gnome-calculator gnome-disk-utility nemo seahorse redshift gnome-screenshot xed gnome-logs gnome-system-monitor gnome-terminal rhythmbox totem vinagre xreader geary nemo-fileroller nemo-image-converter nemo-seahorse meld') # nemo-preview nemo-share
+			# gpasswd -a $USER sambashare
 
 			# KDE Connect
 			if enable_aur:
@@ -2430,7 +2427,7 @@ def de_setup():
 			errors = 0
 			if use_qt_apps: errors += Pkg.install('xdg-desktop-portal-kde')
 			else: errors += Pkg.install('xdg-desktop-portal-gtk')
-			errors = Pkg.install('flatpak-builder fakeroot fakechroot') # flatpak-builder
+			errors += Pkg.install('flatpak-builder fakeroot fakechroot') # flatpak-builder
 			errors += Cmd.log('pacman -D --asexplicit flatpak')
 			"""
 			Dirs for .desktop files:
@@ -2451,6 +2448,7 @@ def de_setup():
 				Cmd.log('systemctl enable snapd.socket apparmor snapd.apparmor')
 				Cmd.log('ln -s /var/lib/snapd/snap /snap') # For classic confinement snaps
 				# https://wiki.archlinux.org/index.php/AppArmor#Installation
+				# TODO: Do snap core setup
 				add_kernel_par('apparmor=1 security=apparmor')
 				write_status(errors)
 			
@@ -2504,10 +2502,10 @@ def de_setup():
 		# Use GTK+ 2 theme for Qt5 apps to make them feel more native
 		# NOTE: This breaks default appearance of VirtualBox >= 6.0 & possibly others!
 		if not use_qt_apps:
-			Pkg.install('qt5-styleplugins')
+			Pkg.install('qt5-styleplugins gtk-engine-murrine')
 			file = '/etc/environment'
 			Cmd.log('chmod 770 ' + file)
-			Cmd.log(f'echo "QT_QPA_PLATFORMTHEME=gtk2" >> {file}')
+			Cmd.log('echo "QT_QPA_PLATFORMTHEME=gtk2" >> ' + file)
 			Cmd.log('chmod 644 ' + file)
 
 		write_msg('Configuring some additional fonts, please wait...', 1)

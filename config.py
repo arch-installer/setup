@@ -67,7 +67,7 @@ enable_aur = True
 # Should AUR packages & other source code be compiled with 'march=native' for optimal performance?
 # NOTE Enabling this makes compiled code "tied" to the kind of CPU they were built on
 # def. 'False'
-optimize_compilation = True
+optimize_compilation = False
 
 # Should cached AUR packages be optimized as well?
 # They will be stored in directories named after the specific CPU model
@@ -150,14 +150,16 @@ gpu_has_switchable_gfx = False
 # Desktop environment to install
 # none     = Leave as a base install
 # cinnamon = Linux Mint's Cinnamon DE
+# xfce     = XFCE 4 DE
 # gnome    = The GNOME 3 desktop environment
 # mate     = Forked GNOME 2 DE
-# kde      = KDE Plasma 5 DE
-# xfce     = XFCE 4 DE
-# dde      = Deepin Desktop Environment
 # budgie   = The Solus project's DE
-# lxde     = A lightweight X11 DE
+# pantheon = Pantheon DE from Elementary OS, coming soon™️
+# dde      = Deepin Desktop Environment
+# kde      = KDE Plasma 5 DE
 # lxqt     = The new upcoming DE to replace LXDE
+# lxde     = A lightweight X11 DE
+# openbox  = Configurable stacking window manager, coming soon™️
 # i3       = A wm that can work as a DE (i3-gaps)
 # dummy    = Install extra packages meant for DE's without one (particularly useful for custom setups)
 # def. ''
