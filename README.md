@@ -1,9 +1,9 @@
 # ArchInstaller.py
 A semi-automatic & configurable Arch Linux installer script written in Python.
 
-You should already be familiar with [Arch Linux](https://www.archlinux.org) before using this as things may and inevitably **will** go wrong.
+Actual script configuration is done in the [`config.py`](config.py) module & [`custom_setup()`](setup.py#L24) method found at the top of [`setup.py`](setup.py).
 
-Actual script configuration is done in the `config.py` module & `custom_setup()` method found at the top of `setup.py`.
+You should already be familiar with [Arch Linux](https://www.archlinux.org) before using this and be prepared to fix stuff yourself as things may and inevitably **will** go wrong.
 
 **DISCLAIMER:** This is still `alpha` state software and will keep changing in the future.
 
