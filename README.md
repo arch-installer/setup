@@ -22,7 +22,7 @@ Actual script configuration is done in the `config.py` module & `custom_setup()`
 <img src="/Images/install.png" alt="Setup installing compontents 1" width="800" />
 <img src="/Images/install-2.png" alt="Setup installing compontents 2" width="800" />
 
-### GRUB boot menu
+### GRUB boot menu (shown when multibooting)
 <img src="/Images/grub.png" alt="Themed GRUB boot menu" width="800" />
 
 ### Desktop Environments (DEs)
