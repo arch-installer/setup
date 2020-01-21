@@ -80,6 +80,11 @@ optimize_cached_pkgs = False
 # def. 'False'
 use_ccache = True
 
+# Should the testing repository be enabled?
+# This is useful for running the most bleeding edge software at the cost of system stability
+# def. 'False'
+enable_testing = False
+
 # Should 32-bit software support be included?
 # def. 'True'
 enable_multilib = True
@@ -101,11 +106,9 @@ enable_snap = False
 # def. 'False'
 enable_firewall = False
 
-# 0 = Don't enable OpenSSH server
-# 1 = Spawn SSH daemon on connections (recommended)
-# 2 = Run SSH daemon permanently (large SSH traffic)
-# def. '0'
-ssh_server_type = 1
+# Should an SSH daemon be run on the machine by default?
+# def. 'False'
+enable_sshd = False
 
 # 0 = Don't setup a web server stack
 # 1 = Setup LEMP (NGINX, MariaDB, PHP)
@@ -117,9 +120,9 @@ web_server_type = 0
 # stable   = the default Arch Linux kernel
 # hardened = a security-focused Linux kernel
 # lts      = long-term support kernel
-# zen      = kernel aimed at responsiveness
+# zen      = kernel aimed at responsiveness (good for desktops)
 # def. 'stable'
-kernel_type = 'zen'
+kernel_type = 'stable'
 
 # Should GRUB multiboot support be included?
 # This will show a boot menu during startup instead of booting straight to Arch
