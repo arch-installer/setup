@@ -2558,13 +2558,11 @@ def de_setup():
 		ret_val = Cmd.output('dmesg | grep -i " ir "')
 		if ret_val == 0: errors += Pkg.install('lirc')
 
-		# Use GTK+ 2 theme for Qt5 apps to make them feel more native
-		# NOTE: This breaks default appearance of VirtualBox >= 6.0 & possibly others!
-		# TODO: Apply more settings!
+		# Allow simple manual configuration of Qt5 theming with an extra program
 		if not use_qt_apps:
-			Pkg.install('qt5-styleplugins gtk-engine-murrine')
+			Pkg.install('qt5ct qt5-styleplugins gtk-engine-murrine')
 			file = '/etc/environment'
-			Cmd.log('echo "QT_QPA_PLATFORMTHEME=gtk2" >> ' + file)
+			Cmd.log('echo "QT_QPA_PLATFORMTHEME=qt5ct" >> ' + file) # gtk2
 
 		write_msg('Configuring some additional fonts, please wait...', 1)
 		errors = Pkg.install('noto-fonts ttf-dejavu ttf-liberation ttf-inconsolata ttf-bitstream-vera ttf-anonymous-pro ttf-roboto ttf-ubuntu-font-family') # xorg-fonts-misc adobe-source-sans-pro-fonts ttf-droid
