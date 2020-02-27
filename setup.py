@@ -26,13 +26,13 @@ def custom_setup():
 
 	# Install custom packages
 	write_msg("Installing custom packages & applications...", 1)
-	errors = Pkg.install('bash-completion lsof strace psutils gnu-netcat reflector vim htop neofetch lm_sensors rsync pacman-contrib tree')
+	errors = Pkg.install('bash-completion lsof strace psutils gnu-netcat reflector vim htop neofetch lm_sensors rsync tree')
 	if enable_aur:
 		errors += Pkg.aur_install('c-lolcat downgrade')
 
 	if de != '':
 		# Xorg, MIME, cursors, fonts etc
-		errors += Pkg.install('xorg-xkill xorg-xprop xorg-xrandr xorg-xauth x11-ssh-askpass xorg-fonts-alias perl-file-mimeinfo perl-net-dbus perl-x11-protocol lsd ctags trash-cli wget capitaine-cursors')
+		errors += Pkg.install('xorg-xkill xorg-xprop xorg-xrandr xorg-xauth x11-ssh-askpass xorg-fonts-alias perl-file-mimeinfo perl-net-dbus perl-x11-protocol lsd ctags trash-cli wget capitaine-cursors youtube-dl python-pycryptodome')
 
 		if install_de_apps and vm_env == '':
 			errors += Pkg.install('noto-fonts-emoji noto-fonts-cjk code discord')
@@ -40,8 +40,7 @@ def custom_setup():
 
 			# Steam
 			if enable_multilib and not bat_present:
-				errors += Pkg.install('steam steam-native-runtime wqy-zenhei lib32-libldap')
-				Cmd.log(f'mv {apps_path}/steam-native.desktop {apps_path}/steam-native.desktop.bak')
+				errors += Pkg.install('steam wqy-zenhei lib32-libldap')
 				IO.replace_ln(f'{apps_path}/steam.desktop', 'Name=', 'Name=Steam')
 
 		# Powerline status for Vim
@@ -755,6 +754,8 @@ def sel_par_tool(hide_guide=False):
 
 		write_ln("   Enter '§3L§0' to view partitions using §3lsblk")
 		write_ln("   Enter '§2I§0' to view partitions using §2blkid", 2)
+
+		# TODO: Add note to "cfdisk" about choosing UEFI/GPT vs BIOS/DOS!
 
 	# '>> Selection (F/G/O/L/I) >> '
 	write_msg('Selection (')
@@ -2054,6 +2055,10 @@ def add_kernel_par(parameters='', only_default=True):
 		Cmd.log(f'sed \'{all_ln}s/.*/{all_pars}/\' -i /etc/default/grub')
 
 def get_configs(repo):
+	if not fetch_configs:
+		log(f"\n[setup.py:get_configs('{repo}')] WARN: Ignoring since fetch_configs wasn't enabled.")
+		return 1
+
 	# TODO Put working stuff in /tmp?
 	# Fetch config archive
 	errors = Cmd.log(f'curl https://github.com/arch-installer/{repo}/archive/master.zip -Lso /configs-master.zip')
@@ -2075,12 +2080,13 @@ def get_configs(repo):
 	return errors
 
 def de_setup():
-	# DE configs (common DE)
-	write_msg("Setting up DE specific configs...", 1)
-	errors = get_configs('common')
-	errors += get_configs(de) # e.g. 'cinnamon'
-	#if not bat_present: Cmd.log('cd /etc/xdg/autostart/ && mv numlockx.desktop.bak numlockx.desktop; cd')
-	write_status(errors)
+	if fetch_configs:
+		# DE configs (common DE)
+		write_msg("Setting up DE specific configs...", 1)
+		errors = get_configs('common')
+		errors += get_configs(de) # e.g. 'cinnamon'
+		#if not bat_present: Cmd.log('cd /etc/xdg/autostart/ && mv numlockx.desktop.bak numlockx.desktop; cd')
+		write_status(errors)
 
 	# Components
 	de_dislay = de.upper().replace('XFCE', 'Xfce').replace('CINNAMON', 'Cinnamon').replace('BUDGIE', 'Budgie').replace('LXQT', 'LXQt').replace('I3', 'i3')
@@ -2125,7 +2131,7 @@ def de_setup():
 		# TODO gnome-getting-started-docs after working on initial setup phase
 
 		if install_de_apps:
-			errors += Pkg.install('eog file-roller gedit gnome-calculator gnome-calendar gnome-clocks gnome-disk-utility gnome-font-viewer gnome-logs gnome-music gnome-photos gnome-screenshot gnome-system-monitor gnome-todo gnome-weather gnome-documents gnome-contacts gnome-tweaks totem seahorse evince vinagre') # Main apps; rhythmbox gnome-weather gnome-contacts gnome-sound-recorder epiphany polari
+			errors += Pkg.install('eog file-roller gedit gnome-calculator gnome-calendar gnome-clocks gnome-disk-utility gnome-font-viewer gnome-logs gnome-music gnome-photos gnome-screenshot gnome-system-monitor gnome-todo gnome-weather gnome-documents gnome-contacts gnome-tweaks seahorse evince vinagre') # Main apps; rhythmbox gnome-weather gnome-contacts gnome-sound-recorder epiphany polari
 			#errors += Pkg.install('') # Misc apps
 			#errors += Pkg.install('') # App opt-deps; gedit-code-assistance gedit-plugins eog-plugins
 
@@ -2160,7 +2166,7 @@ def de_setup():
 			log(f"\n[setup.py:de_setup()] Set X kbmap: '{kbmap}'")
 
 			# TODO Check if §locale needs to be full 'en_US.UTF-8' form instead of 'en_US'
-			dconf = Cmd.output('curl https://git.io/gnome-dconf.ini -Ls').strip().replace('§locale', LC_ALL).replace('§ntp', str(enable_ntp).lower()).replace('§xkb', kbmap)
+			dconf = Cmd.output('curl https://git.io/gnome-dconf.ini -Ls').strip().replace('§locale', LC_ALL).replace('§xkb', kbmap)
 			ret_val = IO.write('/dconf.ini', dconf) # /tmp/dconf.ini
 			#for user in users.split(','):
 			#	Cmd.log('$ dbus-launch --exit-with-session dconf load / < /dconf.ini', user)
@@ -2220,7 +2226,7 @@ def de_setup():
 		# TODO Remove every useless stuff
 		errors += Pkg.install('phonon-qt5-vlc qt5-translations kdialog qt5-graphicaleffects redshift') # phonon-qt5-gstreamer
 		# TODO Only install translations if something else than en_US (also) detected in locales
-		errors += Pkg.install_group('sddm plasma plasma-wayland-session qt5-wayland kde-applications', 'kdevelop kdenlive umbrello kimagemapeditor cervisia kcachegrind kmix lokalize akonadi akonadiconsole okular ktimer kruler kget akregator kde-dev-utils juk sweeper kgpg filelight kmailtransport kirigami-gallery plasma-sdk kapptemplate kwordquiz khangman kiten klettres parley kanagram kbruch cantor kalgebra kig kmplot rocs artikulate kturtle kgeography step blinken minuet ktouch kalzium marble libkdegames kolourpaint kwave dragon konqueror kcharselect kteatime kate kdf kbackup kopete telepathy-qt') # qt5-tools
+		errors += Pkg.install_group('sddm plasma plasma-wayland-session qt5-wayland kde-applications', 'kdevelop kdenlive umbrello kimagemapeditor cervisia kcachegrind kmix lokalize akonadi akonadiconsole okular ktimer kruler kget akregator kde-dev-utils juk sweeper kgpg filelight kmailtransport kirigami-gallery plasma-sdk kapptemplate kwordquiz khangman kiten klettres parley kanagram kbruch cantor kalgebra kig kmplot rocs artikulate kturtle kgeography step blinken minuet ktouch kalzium marble libkdegames kolourpaint kwave dragon konqueror kcharselect kteatime kate kdf kbackup kopete telepathy-qt elisa gwenview') # qt5-tools
 		#if enable_aur and install_pamac: errors += Pkg.aur_install('pamac-tray-appindicator')
 
 		# wayland: export GDK_BACKEND=wayland QT_QPA_PLATFORM=wayland-egl SDL_VIDEODRIVER=wayland CLUTTER_BACKEND=wayland
@@ -2249,7 +2255,7 @@ def de_setup():
 		# TODO Set cursor, dark theme w/ blur etc
 
 	elif de == 'xfce':
-		exclude_list = 'xfce4-eyes-plugin xfce4-dict' # xfce4-mpc-plugin
+		exclude_list = 'xfce4-eyes-plugin xfce4-dict parole' # xfce4-mpc-plugin
 
 		if not bat_present:
 			exclude_list += ' xfce4-battery-plugin'
@@ -2278,17 +2284,16 @@ def de_setup():
 
 	elif de == 'dde':
 		# TODO https://wiki.archlinux.org/index.php/Deepin_Desktop_Environment#Customize_touchpad_gesture_behavior
-		errors += Pkg.install(f'deepin-anything-{("dkms" if use_dkms_pkgs else "arch")} deepin-kwin deepin-session-ui deepin-community-wallpapers deepin-turbo dtkwm deepin-screensaver-pp deepin-shortcut-viewer deepin-terminal') # deepin-kwin deepin-wallpapers-plasma deepin-topbar
+		errors += Pkg.install(f'deepin-anything-{("dkms" if use_dkms_pkgs else "arch")} deepin-session-ui deepin-community-wallpapers deepin-turbo dtkwm deepin-screensaver-pp deepin-shortcut-viewer deepin-terminal') # deepin-kwin deepin-wallpapers-plasma deepin-topbar
 		errors += Pkg.install('qt5-translations zssh python-xdg easy-rsa proxychains-ng iw networkmanager-openconnect networkmanager-openvpn networkmanager-pptp networkmanager-strongswan networkmanager-vpnc network-manager-sstp')
 		errors += Pkg.install('redshift file-roller gedit')
 		if install_de_apps:
-			errors += Pkg.install('deepin-manual deepin-boot-maker deepin-calculator deepin-clone deepin-image-viewer deepin-movie deepin-music deepin-picker deepin-screen-recorder deepin-screenshot deepin-system-monitor deepin-voice-recorder geary')
+			errors += Pkg.install('deepin-boot-maker deepin-calculator deepin-clone deepin-image-viewer deepin-movie deepin-music deepin-picker deepin-screen-recorder deepin-screenshot deepin-system-monitor deepin-voice-recorder geary') # deepin-manual
 
 		# Hide some app icons
 		# hide_apps('redshift-gtk xscreensaver-properties')
 		hide_app('redshift-gtk')
 		hide_app('xscreensaver-properties')
-		if Cmd.exists('mpv'): hide_app('mpv')
 
 		# TODO Setup touchpad gestures: /usr/share/dde-daemon/gesture.json
 		# Sounds: /usr/share/sounds/deepin/stereo
@@ -2304,11 +2309,11 @@ def de_setup():
 		Pkg.install('cinnamon-translations gnome-color-manager gnome-online-accounts gtk-engines gtk3 ffmpegthumbnailer freetype2 libraqm djvulibre libspectre gnome-keyring libdmapsharing grilo-plugins libnotify python-xdg')
 
 		# Other
-		Pkg.install('arc-gtk-theme')
+		Pkg.install('arc-gtk-theme gnome-terminal')
 
 		# Apps
 		if install_de_apps:
-			errors += Pkg.install('file-roller gnome-calculator gnome-disk-utility nemo seahorse redshift gnome-screenshot xed gnome-logs gnome-system-monitor gnome-terminal rhythmbox totem vinagre xreader geary nemo-fileroller nemo-image-converter nemo-seahorse meld') # nemo-preview nemo-share
+			errors += Pkg.install('file-roller gnome-calculator gnome-disk-utility nemo seahorse redshift gnome-screenshot xed gnome-logs gnome-system-monitor rhythmbox vinagre xreader geary nemo-fileroller nemo-image-converter nemo-seahorse meld') # nemo-preview nemo-share
 			# gpasswd -a $USER sambashare
 
 			# KDE Connect
@@ -2345,7 +2350,7 @@ def de_setup():
 
 	elif de == 'lxde':
 		errors += Pkg.install_group('lxde', 'lxdm')
-		errors += Pkg.install('xorg-xwininfo xorg-xprop xorg-xkill compton gnome-themes-standard ttf-droid python-xdg python2-xdg fluidsynth libmad opusfile wireless_tools gtk-engines gpart mtools network-manager-applet libnotify notify-osd pasystray paprefs xfce4-power-manager feh')
+		errors += Pkg.install('xorg-xwininfo xorg-xprop xorg-xkill picom gnome-themes-standard ttf-droid python-xdg python2-xdg fluidsynth libmad opusfile wireless_tools gtk-engines gpart mtools network-manager-applet libnotify notify-osd pasystray paprefs xfce4-power-manager feh')
 		errors += Pkg.install('sylpheed xarchiver galculator leafpad xpad xfce4-screenshooter nm-connection-editor obconf rofi redshift')
 
 		Cmd.log('cp /usr/bin/lxde-logout /usr/bin/lxde-logout.bak')
@@ -2379,7 +2384,7 @@ def de_setup():
 
 	elif de == 'lxqt':
 		errors += Pkg.install('--asexplicit libstatgrab libsysstat lm_sensors') # Opt-deps
-		errors += Pkg.install('sddm obconf-qt lxqt-themes lxqt-session lxqt-qtplugin lxqt-runner lxqt-panel lxqt-powermanagement lxqt-openssh-askpass lxqt-policykit lxqt-notificationd lxqt-config lxqt-admin lxqt-about lxqt-sudo pcmanfm-qt qterminal breeze-icons compton') # lxqt
+		errors += Pkg.install('sddm obconf-qt lxqt-themes lxqt-session lxqt-qtplugin lxqt-runner lxqt-panel lxqt-powermanagement lxqt-openssh-askpass lxqt-policykit lxqt-notificationd lxqt-config lxqt-admin lxqt-about lxqt-sudo pcmanfm-qt qterminal breeze-icons picom') # lxqt
 
 		if bt_present:
 			errors += Pkg.install('bluedevil')
@@ -2403,20 +2408,24 @@ def de_setup():
 		Cmd.log('systemctl enable sddm')
 
 	elif de == 'i3':
-		# TODO: fancy i3lock, configs for general users (safe)
-		# xorg-xfd xorg-xdpyinfo maim clipnotify notification-daemon
-		errors += Pkg.install('perl-json-xs perl-anyevent-i3 perl-async-interrupt perl-ev perl-guard perl-net-ssleay xorg-xwininfo xorg-xprop xorg-xev xorg-xkill xorg-xrandr xorg-fonts-misc ffmpegthumbnailer gnome-themes-extra libnotify python-gobject python-xdg') # Opt-deps
-		errors += Pkg.install('i3-gaps mate-terminal lxrandr rofi dunst nitrogen compton ranger nemo cinnamon-translations xfce4-power-manager lxappearance redshift slop scrot xclip polkit-gnome gnome-keyring') # Main components
+		# TODO: Setup and integrate 'betterlockscreen' here at some point ()
+		errors += Pkg.install('perl-json-xs perl-anyevent-i3 perl-async-interrupt perl-ev perl-guard perl-net-ssleay xorg-xwininfo xorg-xprop xorg-xev xorg-xkill xorg-xrandr ffmpegthumbnailer gnome-themes-extra libnotify python-gobject python-xdg') # Opt-deps
+		errors += Pkg.install('i3-gaps gnome-terminal lxrandr rofi rofimoji dunst nitrogen picom nemo cinnamon-translations lxappearance redshift slop scrot xclip polkit-gnome gnome-keyring playerctl') # Main components
+
+		if fetch_configs:
+			# TODO:
+			# "/home/USER/.config/i3/scripts/autorun/disabled/restore-lxrandr.sh" -> replace all / with \/
+			# sed "s/#display-setup-script.*/display-setup-script = \/usr\/bin\/lightdm-screen-setup/" -i /etc/lightdm/lightdm.conf
+			pass
 
 		if enable_aur:
-			Pkg.aur_install('rofi-dmenu rofi-greenclip polybar xmousepasteblock xviewer mint-themes')
+			Pkg.aur_install('rofi-dmenu rofi-greenclip polybar xmousepasteblock xviewer mint-themes') # betterlockscreen
 		else:
 			Pkg.install('i3block i3status gpicview arc-gtk-theme')
 
 		if install_de_apps:
 			# network-manager-applet jpegexiforient nemo-image-converter nemo-preview nemo-share djvulibre libspectre jsoncpp
-			errors += Pkg.install('atool w3m highlight mediainfo odt2txt perl-image-exiftool mtools gpart')
-			errors += Pkg.install('arandr nemo-fileroller xed dconf-editor gnome-calculator gnome-clocks gnome-system-monitor gparted nemo-seahorse gucharmap')
+			errors += Pkg.install('htop arandr nemo-fileroller xed dconf-editor gnome-calculator gnome-clocks gparted nemo-seahorse gucharmap ncdu')
 
 			if enable_aur:
 				Pkg.aur_install('gscreenshot')
@@ -2428,7 +2437,7 @@ def de_setup():
 
 		# Laptops
 		if bat_present:
-			Pkg.install('xorg-xbacklight xorg-xgamma')
+			Pkg.install('xfce4-power-manager xorg-xbacklight xorg-xgamma')
 
 		# Desktops
 		else:
@@ -2471,8 +2480,9 @@ def de_setup():
 			hide_app('bssh')
 			hide_app('bvnc')
 
-		if Cmd.exists('compton'):
+		if Cmd.exists('picom'):
 			hide_app('compton')
+			hide_app('picom')
 
 		# TODO Move flatpak, snapd & other stuff outside DE to install on no-DE systems if required
 		if enable_flatpak:
@@ -2504,7 +2514,7 @@ def de_setup():
 				# TODO: Do snap core setup
 				add_kernel_par('apparmor=1 security=apparmor')
 				write_status(errors)
-			
+
 			# TODO After additional packages
 			if Cmd.exists('gnome-terminal'):
 				write_msg('Patching GNOME Terminal to include transparency...', 1)
@@ -2536,7 +2546,8 @@ def de_setup():
 		else:
 			Pkg.install('sound-theme-freedesktop')
 
-		if enable_firewall: errors += Pkg.install('gufw')
+		if enable_firewall:
+			errors += Pkg.install('gufw')
 
 		if found_in_log('gvfs-goa: '):
 			errors += Pkg.install('--asexplicit gvfs-goa gvfs-google', False)
@@ -2559,10 +2570,10 @@ def de_setup():
 		if ret_val == 0: errors += Pkg.install('lirc')
 
 		# Allow simple manual configuration of Qt5 theming with an extra program
-		if not use_qt_apps:
+		if not use_qt_apps and de != "dde":
 			Pkg.install('qt5ct qt5-styleplugins gtk-engine-murrine')
 			file = '/etc/environment'
-			Cmd.log('echo "QT_QPA_PLATFORMTHEME=qt5ct" >> ' + file) # gtk2
+			Cmd.exec('echo "QT_QPA_PLATFORMTHEME=qt5ct" >> ' + file) # gtk2
 
 		write_msg('Configuring some additional fonts, please wait...', 1)
 		errors = Pkg.install('noto-fonts ttf-dejavu ttf-liberation ttf-inconsolata ttf-bitstream-vera ttf-anonymous-pro ttf-roboto ttf-ubuntu-font-family') # xorg-fonts-misc adobe-source-sans-pro-fonts ttf-droid
@@ -2578,10 +2589,15 @@ def de_setup():
 		write_msg('Installing some additional applications, please wait...', 1)
 		errors = Pkg.install('firefox')
 		if install_de_apps:
-			errors += Pkg.install('pavucontrol gimp libreoffice-fresh bleachbit')
+			errors += Pkg.install('pavucontrol gimp bleachbit')
 			IO.replace_ln(f'{apps_path}/pavucontrol.desktop', 'Icon=', 'Icon=gnome-volume-control')
-			Cmd.log(f'sed "37s/.*/NoDisplay=true\\n/" -i {apps_path}/libreoffice-base.desktop')
-			Cmd.log(f'sed "38s/.*/NoDisplay=true\\n/" -i {apps_path}/libreoffice-math.desktop')
+
+			if install_office:
+				errors += Pkg.install('libreoffice-fresh')
+				# Try to install language pack
+				#Pkg.install(f'libreoffice-fresh-{keymap}')
+				Cmd.log(f'sed "37s/.*/NoDisplay=true\\n/" -i {apps_path}/libreoffice-base.desktop')
+				Cmd.log(f'sed "38s/.*/NoDisplay=true\\n/" -i {apps_path}/libreoffice-math.desktop')
 
 			if de == 'kde':
 				errors += Pkg.install('ktorrent')
@@ -2590,9 +2606,13 @@ def de_setup():
 			else:
 				errors += Pkg.install('transmission-gtk')
 
-			if use_qt_apps or de == 'lxde': # Media player
+			if use_qt_apps: # Media player
 				errors += Pkg.install('vlc protobuf libmicrodns live-media libgoom2 projectm dav1d qt5-translations') # Qt5
-			# else 'parole' etc
+			else:
+				if de != 'dde':
+					errors += Pkg.install('celluloid')
+				if enable_aur:
+					errors += Pkg.aur_install('mpv-mpris')
 
 			if enable_printing: # Scanning / printing software
 				# For HP printers
@@ -2794,13 +2814,14 @@ def chroot_setup():
 	if enable_printing: printing_setup()
 
 	# Configs
-	write_msg("Setting up base system configs...", 1)
-	Pkg.install('unzip')
-	errors = get_configs('base')
-	errors = get_configs('laptop' if bat_present else 'desktop')
-	if not use_networkmanager or nm_rand_mac_addr: errors += Cmd.log('rm /etc/NetworkManager/conf.d/00-no-rand-wifi-scan-mac-addr.conf')
-	if not use_ccache: errors += Cmd.log('rm /etc/ccache.conf')
-	write_status(errors)
+	if fetch_configs:
+		write_msg("Setting up base system configs...", 1)
+		Pkg.install('unzip')
+		errors = get_configs('base')
+		errors = get_configs('laptop' if bat_present else 'desktop')
+		if not use_networkmanager or nm_rand_mac_addr: errors += Cmd.log('rm /etc/NetworkManager/conf.d/00-no-rand-wifi-scan-mac-addr.conf')
+		if not use_ccache: errors += Cmd.log('rm /etc/ccache.conf')
+		write_status(errors)
 
 	if de != '': de_setup()
 	# else: remove "~/.hidden" etc files unused?
@@ -2824,7 +2845,8 @@ def chroot_setup():
 
 	# TODO Boot time improvements
 
-	custom_setup()
+	if run_custom_setup:
+		custom_setup()
 
 	# Make AUR package build optimizations (after all caching)
 	if optimize_compilation and not (not pkgcache_enabled or optimize_cached_pkgs):
@@ -2979,8 +3001,7 @@ ret_val = Pkg.install('parted btrfs-progs xfsprogs f2fs-tools', False) # e2fspro
 write_status(ret_val)
 
 # NTP time synchronization
-if enable_ntp:
-	ntp_setup()
+ntp_setup()
 
 write_msg('Entering disk partitioning menu...', 1)
 time.sleep(0.25)

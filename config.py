@@ -175,6 +175,10 @@ de = 'cinnamon'
 # def. 'True'
 install_de_apps = True
 
+# Should LibreOffice be installed among other DE apps?
+# def. 'True'
+install_office = True
+
 # Pamac is a simple GTK+ interface to manage Arch Linux & AUR packages
 # NOTE: This requires AUR support to be enabled
 # Without this out of the box your only choice to manipulate software would be via the terminal w/ yay & pacman
@@ -201,6 +205,12 @@ use_networkmanager = True
 # def. 'False'
 nm_rand_mac_addr = False
 
-# Whether to enable Network Time Protocol time synchronization
+# Should default system configurations be fetched as per the project repositories?
 # def. 'True'
-enable_ntp = True
+fetch_configs = True
+
+# Should custom_setup() be called near end of the setup?
+# This can be used to do extra setup specific to any hardware
+# (or by default install some things that I'd get anyway)
+# def. 'True'
+run_custom_setup = True
