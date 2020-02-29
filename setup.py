@@ -2860,6 +2860,10 @@ def chroot_setup():
 	add_kernel_par('scsi_mod.use_blk_mq=1')
 	#IO.write('/etc/udev/rules.d/60-ioschedulers.rules', '# Scheduler for non-rotating disks\nACTION=="add|change", KERNEL=="sd[a-z]|mmcblk[0-9]*|nvme[0-9]*", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="mq-deadline"\n# Scheduler for rotating disks\nACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="1", ATTR{queue/scheduler}="bfq"')
 
+	# Lower default service timeout values (from 90s)
+	IO.replace_ln("/etc/systemd/system.conf", "#DefaultTimeoutStartSec=", "DefaultTimeoutStartSec=15s")
+	IO.replace_ln("/etc/systemd/system.conf", "#DefaultTimeoutStopSec=", "DefaultTimeoutStopSec=15s")
+
 	if multibooting: bootloader_extra_setup()
 	else:
 		write_msg('Updating new kernel parameter for GRUB...', 1)
@@ -2867,6 +2871,7 @@ def chroot_setup():
 		write_status(ret_val)
 
 	write_msg('Performing cleanup tasks...', 1)
+	errors = 0
 
 	# Clean up LVM os-prober scan fix dirs
 	# TODO: Fix "/hostrun" not being removed
