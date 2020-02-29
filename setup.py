@@ -2833,7 +2833,7 @@ def chroot_setup():
 	if bat_present:
 		write_msg('Configuring some packages for battery power savings...', 1)
 		errors = Pkg.install('ethtool smartmontools x86_energy_perf_policy tlp tlp-rdw')
-		errors += Cmd.log('systemctl enable tlp tlp-sleep NetworkManager-dispatcher')
+		errors += Cmd.log('systemctl enable tlp NetworkManager-dispatcher')
 		errors += Cmd.log('systemctl mask systemd-rfkill.service systemd-rfkill.socket')
 		# TODO Detect ThinkPad
 		# TODO Btrfs: 'SATA_LINKPWR_ON_BAT=max_performance' for these systems
