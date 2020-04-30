@@ -2437,7 +2437,8 @@ def de_setup():
 
 		# Laptops
 		if bat_present:
-			Pkg.install('xfce4-power-manager xorg-xbacklight xorg-xgamma')
+			Pkg.install('xfce4-power-manager xorg-xbacklight xorg-xgamma xorg-xinput')
+			# TODO: Touchpad configuration (e.g. tap to click, ...)
 
 		# Desktops
 		else:
@@ -2589,7 +2590,7 @@ def de_setup():
 		write_msg('Installing some additional applications, please wait...', 1)
 		errors = Pkg.install('firefox')
 		if install_de_apps:
-			errors += Pkg.install('pavucontrol gimp bleachbit')
+			errors += Pkg.install('pavucontrol bleachbit')
 			IO.replace_ln(f'{apps_path}/pavucontrol.desktop', 'Icon=', 'Icon=gnome-volume-control')
 
 			if install_office:
@@ -2607,8 +2608,9 @@ def de_setup():
 				errors += Pkg.install('transmission-gtk')
 
 			if use_qt_apps: # Media player
-				errors += Pkg.install('vlc protobuf libmicrodns live-media libgoom2 projectm dav1d qt5-translations') # Qt5
+				errors += Pkg.install('vlc protobuf libmicrodns live-media libgoom2 projectm dav1d qt5-translations krita') # Qt5
 			else:
+				errors += Pkg.install('gimp')
 				if de != 'dde':
 					errors += Pkg.install('celluloid')
 				if enable_aur:
