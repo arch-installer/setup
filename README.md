@@ -39,9 +39,11 @@ Coming soon™️
 ## Deployment
 This is an example of how I'm used to deploying the scripts remotely to a system running the ArchISO environment via ethernet:
 ```
-TARGET # passwd                –  required to use SSH
-TARGET # systemctl start sshd  –  launching the SSH server Daemon
-TARGET # ip a                  –  get live system IP for SSH / file transfer (e.g. 192.168.1.105)
+TARGET #
+
+passwd                –  required to use SSH
+systemctl start sshd  –  launching the SSH server Daemon
+ip a                  –  get live system IP for SSH / file transfer (e.g. 192.168.1.105)
 ```
 Then to transfer the scripts via terminal from the current directory to the target system:
 ```
