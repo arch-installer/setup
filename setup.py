@@ -2696,7 +2696,7 @@ def printing_setup():
 	Cmd.log('mkdir -p /etc/samba/')
 	Cmd.log('touch /etc/samba/smb.conf')
 	# TODO Add users to 'sambashare' group for file sharing access? (Cinnamon)
-	errors += Pkg.install('cups cups-pk-helper cups-pdf cloudprint-cups libcups gutenprint gsfonts foomatic-db foomatic-db-engine foomatic-db-gutenprint-ppds poppler-glib sane net-snmp colord-sane argyllcms system-config-printer samba python-pysmbc') # foomatic-db-nonfree foomatic-db-ppds
+	errors += Pkg.install('cups cups-pk-helper cups-pdf libcups gutenprint gsfonts foomatic-db foomatic-db-engine foomatic-db-gutenprint-ppds poppler-glib sane net-snmp colord-sane argyllcms system-config-printer samba python-pysmbc') # foomatic-db-nonfree foomatic-db-ppds
 	if enable_multilib: errors += Pkg.install('lib32-libcups')
 	if bt_present: errors += Pkg.install('bluez-cups')
 
