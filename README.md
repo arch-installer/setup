@@ -60,7 +60,7 @@ To follow the progress and view the commands being run by the script, switch to 
 ```
 TARGET # tail -f /tmp/setup.log
 ```
-**NOTE:** This will need to be ended with `Ctrl` + `C` when entering chroot as the file gets moved, you'll then need to run this the command again.
+**NOTE:** This will need to be ended with `Ctrl` + `C` when entering chroot as the file gets moved, then run this command again.
 
 Once the system is installed the log will be moved to `/var/log/setup.log` on the target system for further investigation / removal.
 
