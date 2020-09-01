@@ -7,8 +7,26 @@ You should already be familiar with [Arch Linux](https://www.archlinux.org) befo
 
 **DISCLAIMER:** This is still `alpha` state software and will keep changing in the future.
 
+### Table of Contents
+* [Deployment](#deployment)
+* [Lists in config](#lists-in-config)
+* [Following progress](#following-progress)
+* [Screenshots](#screenshots)
+* [Resources](#resources)
+
 ## Deployment
-This is an example of how I'm used to deploying the scripts remotely to a system running the ArchISO environment via ethernet:
+The following examples expect you to already be booted into the ArchISO environment.
+
+To fetch and run the script, one can execute:
+```bash
+curl https://git.io/JemEQ -Lo setup.py
+python setup.py
+# Fetch a copy of config.py as suggested by the script and edit it to suit your needs!
+# Afterwards launch the script again and follow the instructions
+python setup.py
+```
+
+For remote deployment of the scripts to a system (e.g. Virtual Machine) via ethernet I've been using the following:
 ```
 TARGET #
 
@@ -28,6 +46,14 @@ Using the script is as simple as running it like any other (Python) executable:
 TARGET # ./setup.py
 ```
 The rest should be self-explanatory when following the instructions during install :)
+
+## Lists in config
+The [`config.py`](config.py) file has some options with long lists of available values; they're all catalogued here for your convenience:
+
+* [Keymaps](Lists/vconsole-keymaps.txt)
+* [Timezones](Lists/timezones.txt)
+* [Locales](Lists/locales.txt)
+* [TTY fonts](Lists/vconsole-fonts.txt)
 
 ## Following progress
 To follow the progress and view the commands being run by the script, switch to another TTY / login via SSH and do:
@@ -66,3 +92,7 @@ Once the system is installed the log will be moved to `/var/log/setup.log` on th
 
 #### XFCE, GNOME, MATE, Budgie, Pantheon, Deepin, KDE (Plasma), LXQt, LXDE, Openbox, i3
 Coming soon™️
+
+## Resources
+* [Arch Linux wiki](https://wiki.archlinux.org)
+* [D3SOX's Arch guide](https://arch.d3sox.icu)
