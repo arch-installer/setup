@@ -2562,7 +2562,6 @@ def de_setup():
 
 		if disc_tray_present:
 			errors += Pkg.install('libisofs libisoburn libburn libdvdcss libbluray vcdimager libdvdread cdrtools dvd+rw-tools cdrdao transcode cdparanoia dvdauthor udftools emovix')
-		write_status(errors)
 
 		# Add IR packages
 		ret_val = Cmd.output('dmesg | grep -i " ir "')
@@ -2570,9 +2569,13 @@ def de_setup():
 
 		# Allow simple manual configuration of Qt5 theming with an extra program
 		if not use_qt_apps and de != "dde":
-			Pkg.install('qt5ct qt5-styleplugins gtk-engine-murrine')
-			file = '/etc/environment'
-			Cmd.exec('echo "QT_QPA_PLATFORMTHEME=qt5ct" >> ' + file) # gtk2
+			Pkg.install('gtk-engine-murrine')
+			if enable_aur:
+				Pkg.install('qt5ct')
+				Pkg.aur_install('qt5-styleplugins')
+				file = '/etc/environment'
+				Cmd.exec('echo "QT_QPA_PLATFORMTHEME=qt5ct" >> ' + file) # gtk2
+		write_status(errors)
 
 		write_msg('Configuring some additional fonts, please wait...', 1)
 		errors = Pkg.install('noto-fonts ttf-dejavu ttf-liberation ttf-inconsolata ttf-bitstream-vera ttf-anonymous-pro ttf-roboto ttf-ubuntu-font-family') # xorg-fonts-misc adobe-source-sans-pro-fonts ttf-droid
