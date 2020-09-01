@@ -7,35 +7,6 @@ You should already be familiar with [Arch Linux](https://www.archlinux.org) befo
 
 **DISCLAIMER:** This is still `alpha` state software and will keep changing in the future.
 
-## Screenshots
-### Script initialization
-<img src="Images/init.png" alt="Script init sequence" width="800" />
-
-### Disk partitioning
-<img src="Images/gdisk.png" alt="Partitioning with gdisk" width="800" />
-<img src="Images/cgdisk.png" alt="Partitioning with cgdisk" width="800" />
-
-### Mounting partitions
-<img src="Images/mounting.png" alt="Disk mounting menu" width="800" />
-
-### Installation
-<img src="Images/install.png" alt="Setup installing compontents 1" width="800" />
-<img src="Images/install-2.png" alt="Setup installing compontents 2" width="800" />
-
-### GRUB boot menu (shown when multibooting)
-<img src="Images/grub.png" alt="Themed GRUB boot menu" width="800" />
-
-### Desktop Environments (DEs)
-
-#### Base system install
-<img src="Images/base.png" alt="Installed base system" width="800" />
-
-#### Cinnamon
-<img src="Images/cinnamon.png" alt="Installed Cinnamon desktop" width="800" />
-
-#### XFCE, GNOME, MATE, Budgie, Pantheon, Deepin, KDE (Plasma), LXQt, LXDE, Openbox, i3
-Coming soon™️
-
 ## Deployment
 This is an example of how I'm used to deploying the scripts remotely to a system running the ArchISO environment via ethernet:
 ```
@@ -66,3 +37,32 @@ TARGET # tail -f /tmp/setup.log
 **NOTE:** This will need to be ended with `Ctrl` + `C` when entering chroot as the file gets moved, you'll then need to run this the command again.
 
 Once the system is installed the log will be moved to `/var/log/setup.log` on the target system for further investigation / removal.
+
+## Screenshots
+### Script initialization
+<img src="Images/init.png" alt="Script init sequence" width="800" />
+
+### Disk partitioning
+<img src="Images/gdisk.png" alt="Partitioning with gdisk" width="800" />
+<img src="Images/cgdisk.png" alt="Partitioning with cgdisk" width="800" />
+
+### Mounting partitions
+<img src="Images/mounting.png" alt="Disk mounting menu" width="800" />
+
+### Installation
+<img src="Images/install.png" alt="Setup installing compontents 1" width="800" />
+<img src="Images/install-2.png" alt="Setup installing compontents 2" width="800" />
+
+### GRUB boot menu (shown when multibooting)
+<img src="Images/grub.png" alt="Themed GRUB boot menu" width="800" />
+
+### Desktop Environments (DEs)
+
+#### Base system install
+<img src="Images/base.png" alt="Installed base system" width="800" />
+
+#### Cinnamon
+<img src="Images/cinnamon.png" alt="Installed Cinnamon desktop" width="800" />
+
+#### XFCE, GNOME, MATE, Budgie, Pantheon, Deepin, KDE (Plasma), LXQt, LXDE, Openbox, i3
+Coming soon™️
