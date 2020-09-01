@@ -579,11 +579,9 @@ def check_env():
 	os_compat_msg = 'Please only run this script on the Arch Linux installer environment.\n\nhttps://www.archlinux.org/download/'
 	file_msg = "It seems that you are missing a '§f' module.\n"
 	if os.name == 'posix':
-		# TODO Improve a bit
-		#ret_val = Cmd.exec('cat /etc/hostname &>/dev/null')
 		ret_val = Cmd.suppress('cat /etc/hostname')
 		if ret_val == 0:
-			host = IO.read_ln('/etc/hostname')
+			host = Cmd.output("grep -v '^#' /etc/hostname | tr -d '\n'")
 			if host != 'archiso':
 				print(os_compat_msg)
 				exit(3) # 3 = Not running in ArchISO environment
