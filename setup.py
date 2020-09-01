@@ -32,7 +32,7 @@ def custom_setup():
 
 	if de != '':
 		# Xorg, MIME, cursors, fonts etc
-		errors += Pkg.install('xorg-xkill xorg-xprop xorg-xrandr xorg-xauth x11-ssh-askpass xorg-fonts-alias perl-file-mimeinfo perl-net-dbus perl-x11-protocol lsd ctags trash-cli wget capitaine-cursors youtube-dl python-pycryptodome')
+		errors += Pkg.install('xorg-xkill xorg-xprop xorg-xrandr xorg-xauth x11-ssh-askpass xorg-fonts-alias-misc perl-file-mimeinfo perl-net-dbus perl-x11-protocol lsd ctags trash-cli wget capitaine-cursors youtube-dl python-pycryptodome')
 
 		if install_de_apps and vm_env == '':
 			errors += Pkg.install('noto-fonts-emoji noto-fonts-cjk code discord')
